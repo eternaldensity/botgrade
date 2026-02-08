@@ -98,6 +98,30 @@ defmodule BotgradeWeb.CombatLive do
   end
 
   @impl true
+  def handle_event("toggle_scavenge_card", %{"card-id" => card_id}, socket) do
+    case CombatServer.toggle_scavenge_card(socket.assigns.combat_id, card_id) do
+      {:ok, _state} -> {:noreply, assign(socket, error_message: nil)}
+      {:error, reason} -> {:noreply, assign(socket, error_message: reason)}
+    end
+  end
+
+  @impl true
+  def handle_event("confirm_scavenge", _params, socket) do
+    case CombatServer.confirm_scavenge(socket.assigns.combat_id) do
+      {:ok, _state} -> {:noreply, assign(socket, error_message: nil)}
+      {:error, reason} -> {:noreply, assign(socket, error_message: reason)}
+    end
+  end
+
+  @impl true
+  def handle_event("next_combat", _params, socket) do
+    player_cards = socket.assigns.state.player.deck
+    combat_id = Base.encode16(:crypto.strong_rand_bytes(4), case: :lower)
+    {:ok, _pid} = CombatSupervisor.start_combat(combat_id, player_cards: player_cards)
+    {:noreply, push_navigate(socket, to: ~p"/combat/#{combat_id}")}
+  end
+
+  @impl true
   def handle_event("new_combat", _params, socket) do
     combat_id = Base.encode16(:crypto.strong_rand_bytes(4), case: :lower)
     {:ok, _pid} = CombatSupervisor.start_combat(combat_id)
@@ -131,8 +155,62 @@ defmodule BotgradeWeb.CombatLive do
           {@error_message}
         </div>
 
-        <%!-- Victory/Defeat Overlay --%>
-        <div :if={@state.result != :ongoing} class="card bg-base-100 shadow-lg">
+        <%!-- Scavenging Phase --%>
+        <div :if={@state.phase == :scavenging} class="card bg-base-100 shadow-lg">
+          <div class="card-body">
+            <h2 class="text-2xl font-bold text-success text-center mb-2">VICTORY!</h2>
+            <h3 class="card-title text-lg">
+              Scavenge Enemy Wreckage
+              <span class="badge badge-sm">
+                {length(@state.scavenge_selected)}/{@state.scavenge_limit} selected
+              </span>
+            </h3>
+
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 mt-2">
+              <div
+                :for={card <- @state.scavenge_loot}
+                phx-click="toggle_scavenge_card"
+                phx-value-card-id={card.id}
+                class={[
+                  "border rounded-lg p-2 text-xs cursor-pointer transition-all hover:ring-2 ring-primary",
+                  card_border_color(card.type),
+                  card.id in @state.scavenge_selected && "ring-2 ring-success bg-success/10"
+                ]}
+              >
+                <div class="flex justify-between items-start mb-1">
+                  <span class="font-bold">{card.name}</span>
+                  <span class={["badge badge-xs", card_badge(card.type)]}>
+                    {card_type_label(card.type)}
+                  </span>
+                </div>
+                <div class="text-base-content/60 mb-1">
+                  <.card_info card={card} />
+                </div>
+                <div class="flex gap-1 mt-1">
+                  <span :if={card.damage == :damaged} class="badge badge-xs badge-warning">DAMAGED</span>
+                  <span :if={card.damage == :intact} class="badge badge-xs badge-success">INTACT</span>
+                  <span :if={card.id in @state.scavenge_selected} class="badge badge-xs badge-accent">SELECTED</span>
+                </div>
+              </div>
+            </div>
+
+            <div :if={@state.scavenge_loot == []} class="text-center text-base-content/50 py-4">
+              Nothing salvageable remains.
+            </div>
+
+            <div class="card-actions justify-center mt-4 gap-2">
+              <button phx-click="confirm_scavenge" class="btn btn-primary">
+                Take {length(@state.scavenge_selected)} Card{if length(@state.scavenge_selected) != 1, do: "s", else: ""}
+              </button>
+              <button phx-click="confirm_scavenge" class="btn btn-ghost">
+                Skip
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <%!-- Victory/Defeat End Screen --%>
+        <div :if={@state.phase == :ended} class="card bg-base-100 shadow-lg">
           <div class="card-body text-center">
             <h2 class={[
               "text-3xl font-bold",
@@ -141,8 +219,13 @@ defmodule BotgradeWeb.CombatLive do
             ]}>
               {if @state.result == :player_wins, do: "VICTORY!", else: "DEFEAT"}
             </h2>
-            <div class="card-actions justify-center mt-4">
-              <button phx-click="new_combat" class="btn btn-primary">New Combat</button>
+            <div class="card-actions justify-center mt-4 gap-2">
+              <button :if={@state.result == :player_wins} phx-click="next_combat" class="btn btn-primary">
+                Next Combat
+              </button>
+              <button phx-click="new_combat" class="btn btn-outline">
+                New Game
+              </button>
             </div>
           </div>
         </div>
@@ -273,9 +356,12 @@ defmodule BotgradeWeb.CombatLive do
     ]}>
       <div class="flex justify-between items-start mb-1">
         <span class="font-bold">{@card.name}</span>
-        <span class={["badge badge-xs", card_badge(@card.type)]}>
-          {card_type_label(@card.type)}
-        </span>
+        <div class="flex gap-1">
+          <span :if={@card.damage == :damaged} class="badge badge-xs badge-warning">DMG</span>
+          <span class={["badge badge-xs", card_badge(@card.type)]}>
+            {card_type_label(@card.type)}
+          </span>
+        </div>
       </div>
 
       <%!-- Card-specific info --%>
@@ -361,6 +447,7 @@ defmodule BotgradeWeb.CombatLive do
   defp phase_label(:allocate_dice), do: "Allocate Dice"
   defp phase_label(:resolve), do: "Resolving..."
   defp phase_label(:enemy_turn), do: "Enemy Turn"
+  defp phase_label(:scavenging), do: "Scavenging"
   defp phase_label(:ended), do: "Combat Over"
 
   defp card_border_color(:battery), do: "border-warning"

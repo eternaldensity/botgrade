@@ -1,7 +1,7 @@
 defmodule Botgrade.Combat.CombatServer do
   use GenServer
 
-  alias Botgrade.Game.{CombatLogic, StarterDecks}
+  alias Botgrade.Game.{CombatLogic, ScavengeLogic, StarterDecks}
 
   # --- Client API ---
 
@@ -27,14 +27,22 @@ defmodule Botgrade.Combat.CombatServer do
   def finish_allocating(combat_id),
     do: GenServer.call(via(combat_id), :finish_allocating)
 
+  def toggle_scavenge_card(combat_id, card_id),
+    do: GenServer.call(via(combat_id), {:toggle_scavenge_card, card_id})
+
+  def confirm_scavenge(combat_id),
+    do: GenServer.call(via(combat_id), :confirm_scavenge)
+
   # --- Callbacks ---
 
   @impl true
   def init(opts) do
     combat_id = Keyword.fetch!(opts, :combat_id)
+    player_cards = Keyword.get(opts, :player_cards, StarterDecks.player_deck())
+    enemy_cards = Keyword.get(opts, :enemy_cards, StarterDecks.enemy_deck())
 
     state =
-      CombatLogic.new_combat(combat_id, StarterDecks.player_deck(), StarterDecks.enemy_deck())
+      CombatLogic.new_combat(combat_id, player_cards, enemy_cards)
       |> CombatLogic.draw_phase()
 
     {:ok, state}
@@ -98,6 +106,25 @@ defmodule Botgrade.Combat.CombatServer do
       |> maybe_enemy_turn()
       |> maybe_draw_phase()
 
+    broadcast(new_state)
+    {:reply, {:ok, new_state}, new_state}
+  end
+
+  @impl true
+  def handle_call({:toggle_scavenge_card, card_id}, _from, state) do
+    case ScavengeLogic.toggle_card(state, card_id) do
+      {:ok, new_state} ->
+        broadcast(new_state)
+        {:reply, {:ok, new_state}, new_state}
+
+      {:error, reason} ->
+        {:reply, {:error, reason}, state}
+    end
+  end
+
+  @impl true
+  def handle_call(:confirm_scavenge, _from, state) do
+    new_state = ScavengeLogic.confirm_scavenge(state)
     broadcast(new_state)
     {:reply, {:ok, new_state}, new_state}
   end

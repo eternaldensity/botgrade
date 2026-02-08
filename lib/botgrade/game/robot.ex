@@ -33,7 +33,15 @@ defmodule Botgrade.Game.Robot do
     total_hp =
       cards
       |> Enum.filter(&(&1.type == :chassis))
-      |> Enum.reduce(0, fn card, acc -> acc + Map.get(card.properties, :hp_max, 0) end)
+      |> Enum.reduce(0, fn card, acc ->
+        hp = Map.get(card.properties, :hp_max, 0)
+
+        case card.damage do
+          :intact -> acc + hp
+          :damaged -> acc + div(hp, 2)
+          :destroyed -> acc
+        end
+      end)
 
     %__MODULE__{
       id: id,

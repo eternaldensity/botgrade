@@ -241,7 +241,8 @@ defmodule Botgrade.Game.CombatLogicTest do
       new_state = CombatLogic.resolve(state)
       assert new_state.enemy.current_hp == 0
       assert new_state.result == :player_wins
-      assert new_state.phase == :ended
+      assert new_state.phase == :scavenging
+      assert is_list(new_state.scavenge_loot)
     end
   end
 end

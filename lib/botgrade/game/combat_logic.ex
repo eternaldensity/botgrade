@@ -1,5 +1,5 @@
 defmodule Botgrade.Game.CombatLogic do
-  alias Botgrade.Game.{CombatState, Robot, Card, Dice, Deck}
+  alias Botgrade.Game.{CombatState, Robot, Card, Dice, Deck, ScavengeLogic}
 
   @draw_count 5
   @enemy_draw_count 4
@@ -50,6 +50,11 @@ defmodule Botgrade.Game.CombatLogic do
           true ->
             dice =
               Dice.roll(card.properties.dice_count, card.properties.die_sides)
+
+            dice =
+              if card.damage == :damaged,
+                do: Enum.take(dice, max(1, length(dice) - 1)),
+                else: dice
 
             dice_str = Enum.map_join(dice, ", ", fn d -> "#{d.value}" end)
 
@@ -247,6 +252,7 @@ defmodule Botgrade.Game.CombatLogic do
           |> Enum.reduce(weapon.properties.damage_base, fn slot, acc ->
             acc + slot.assigned_die.value
           end)
+          |> apply_damage_penalty(weapon)
 
         absorbed = min(total_damage, def_acc.shield)
         net_damage = total_damage - absorbed
@@ -286,6 +292,7 @@ defmodule Botgrade.Game.CombatLogic do
           |> Enum.reduce(armor.properties.shield_base, fn slot, acc ->
             acc + slot.assigned_die.value
           end)
+          |> apply_damage_penalty(armor)
 
         {shield_acc + shield_value, logs ++ ["#{who_name} activates #{armor.name}: #{shield_value} shield."]}
       end)
@@ -348,11 +355,16 @@ defmodule Botgrade.Game.CombatLogic do
 
   defp reset_battery_flag(card), do: card
 
+  defp apply_damage_penalty(value, %Card{damage: :intact}), do: value
+  defp apply_damage_penalty(value, %Card{damage: :damaged}), do: max(0, div(value, 2))
+  defp apply_damage_penalty(_value, %Card{damage: :destroyed}), do: 0
+
   defp check_victory(state) do
     cond do
       state.enemy.current_hp <= 0 ->
-        %{state | result: :player_wins, phase: :ended}
+        %{state | result: :player_wins}
         |> add_log("Enemy destroyed! You win!")
+        |> ScavengeLogic.begin_scavenge()
 
       state.player.current_hp <= 0 ->
         %{state | result: :enemy_wins, phase: :ended}

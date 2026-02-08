@@ -15,10 +15,10 @@ defmodule Botgrade.Combat.CombatSupervisor do
     Supervisor.init(children, strategy: :one_for_all)
   end
 
-  def start_combat(combat_id) do
+  def start_combat(combat_id, opts \\ []) do
     DynamicSupervisor.start_child(
       Botgrade.Combat.DynamicSupervisor,
-      {Botgrade.Combat.CombatServer, combat_id: combat_id}
+      {Botgrade.Combat.CombatServer, [combat_id: combat_id] ++ opts}
     )
   end
 end

@@ -1,5 +1,5 @@
 defmodule Botgrade.Game.CombatState do
-  alias Botgrade.Game.Robot
+  alias Botgrade.Game.{Robot, Card}
 
   @type phase ::
           :draw
@@ -7,6 +7,7 @@ defmodule Botgrade.Game.CombatState do
           | :allocate_dice
           | :resolve
           | :enemy_turn
+          | :scavenging
           | :ended
 
   @type t :: %__MODULE__{
@@ -17,7 +18,10 @@ defmodule Botgrade.Game.CombatState do
           turn_number: non_neg_integer(),
           turn_owner: :player | :enemy,
           log: [String.t()],
-          result: :ongoing | :player_wins | :enemy_wins
+          result: :ongoing | :player_wins | :enemy_wins,
+          scavenge_loot: [Card.t()],
+          scavenge_selected: [String.t()],
+          scavenge_limit: non_neg_integer()
         }
 
   @enforce_keys [:id, :player, :enemy]
@@ -29,6 +33,9 @@ defmodule Botgrade.Game.CombatState do
     turn_number: 1,
     turn_owner: :player,
     log: [],
-    result: :ongoing
+    result: :ongoing,
+    scavenge_loot: [],
+    scavenge_selected: [],
+    scavenge_limit: 3
   ]
 end

@@ -41,7 +41,7 @@ defmodule Botgrade.Combat.CombatServerTest do
     {:ok, new_state} = CombatServer.finish_allocating(id)
 
     # Should be back to activate_batteries for next turn (or ended)
-    assert new_state.phase in [:activate_batteries, :ended]
+    assert new_state.phase in [:activate_batteries, :scavenging, :ended]
 
     if new_state.phase == :activate_batteries do
       assert new_state.turn_number == 2
