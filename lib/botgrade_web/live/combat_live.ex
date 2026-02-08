@@ -285,12 +285,12 @@ defmodule BotgradeWeb.CombatLive do
 
       <%!-- Battery activation button --%>
       <button
-        :if={@card.type == :battery and @phase == :activate_batteries and @card.properties.remaining_activations > 0}
+        :if={@card.type == :battery and @phase == :activate_batteries and @card.properties.remaining_activations > 0 and not Map.get(@card.properties, :activated_this_turn, false)}
         phx-click="activate_battery"
         phx-value-card-id={@card.id}
         class="btn btn-xs btn-primary w-full mt-1"
       >
-        Activate ({@card.properties.remaining_activations} left)
+        Activate
       </button>
 
       <%!-- Dice slots --%>
