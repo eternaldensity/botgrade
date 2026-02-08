@@ -40,30 +40,38 @@ defmodule Botgrade.Game.CombatLogic do
       %Card{type: :battery} = card ->
         remaining = card.properties.remaining_activations
 
-        if remaining <= 0 do
-          {:error, "Battery is depleted."}
-        else
-          dice =
-            Dice.roll(card.properties.dice_count, card.properties.die_sides)
+        cond do
+          remaining <= 0 ->
+            {:error, "Battery is depleted."}
 
-          dice_str = Enum.map_join(dice, ", ", fn d -> "#{d.value}" end)
+          Map.get(card.properties, :activated_this_turn, false) ->
+            {:error, "Battery already activated this turn."}
 
-          updated_card = %{
-            card
-            | properties: %{card.properties | remaining_activations: remaining - 1}
-          }
+          true ->
+            dice =
+              Dice.roll(card.properties.dice_count, card.properties.die_sides)
 
-          player = state.player
-          hand = replace_card(player.hand, card_id, updated_card)
-          available_dice = player.available_dice ++ dice
+            dice_str = Enum.map_join(dice, ", ", fn d -> "#{d.value}" end)
 
-          player = %{player | hand: hand, available_dice: available_dice}
+            updated_card = %{
+              card
+              | properties:
+                  card.properties
+                  |> Map.put(:remaining_activations, remaining - 1)
+                  |> Map.put(:activated_this_turn, true)
+            }
 
-          state =
-            %{state | player: player}
-            |> add_log("Activated #{card.name}: rolled [#{dice_str}].")
+            player = state.player
+            hand = replace_card(player.hand, card_id, updated_card)
+            available_dice = player.available_dice ++ dice
 
-          {:ok, state}
+            player = %{player | hand: hand, available_dice: available_dice}
+
+            state =
+              %{state | player: player}
+              |> add_log("Activated #{card.name}: rolled [#{dice_str}].")
+
+            {:ok, state}
         end
 
       _other ->
@@ -295,21 +303,23 @@ defmodule Botgrade.Game.CombatLogic do
   defp cleanup_turn(state, who) do
     {combatant, _} = get_combatants(state, who)
 
-    # Clear dice from non-capacitor card slots, move hand to discard
+    # Clear dice from non-capacitor card slots
     hand_cards = clear_dice_from_cards(combatant.hand)
     in_play_cards = clear_dice_from_cards(combatant.in_play)
 
-    # Capacitors with stored dice stay in play
-    {keep_in_play, to_discard_from_play} =
-      Enum.split_with(in_play_cards, fn card ->
+    all_cards = hand_cards ++ in_play_cards
+
+    # Capacitors with stored dice stay in hand for next turn
+    {charged_capacitors, to_discard} =
+      Enum.split_with(all_cards, fn card ->
         card.type == :capacitor and Enum.any?(card.dice_slots, &(&1.assigned_die != nil))
       end)
 
     combatant = %{
       combatant
-      | hand: [],
-        discard: combatant.discard ++ hand_cards ++ to_discard_from_play,
-        in_play: keep_in_play,
+      | hand: charged_capacitors,
+        discard: combatant.discard ++ to_discard,
+        in_play: [],
         available_dice: [],
         shield: 0
     }
@@ -321,6 +331,8 @@ defmodule Botgrade.Game.CombatLogic do
 
   defp clear_dice_from_cards(cards) do
     Enum.map(cards, fn card ->
+      card = reset_battery_flag(card)
+
       if card.type == :capacitor do
         card
       else
@@ -329,6 +341,12 @@ defmodule Botgrade.Game.CombatLogic do
       end
     end)
   end
+
+  defp reset_battery_flag(%Card{type: :battery} = card) do
+    %{card | properties: Map.delete(card.properties, :activated_this_turn)}
+  end
+
+  defp reset_battery_flag(card), do: card
 
   defp check_victory(state) do
     cond do

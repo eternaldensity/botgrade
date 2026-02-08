@@ -3,9 +3,9 @@ defmodule Botgrade.Game.StarterDecks do
 
   def player_deck do
     [
-      battery("bat_1", "Small Battery", dice_count: 1, die_sides: 6, max_activations: 3),
-      battery("bat_2", "Small Battery", dice_count: 1, die_sides: 6, max_activations: 3),
-      battery("bat_3", "Medium Battery", dice_count: 2, die_sides: 4, max_activations: 2),
+      battery("bat_1", "Small Battery", dice_count: 1, die_sides: 6, max_activations: 5),
+      battery("bat_2", "Small Battery", dice_count: 1, die_sides: 6, max_activations: 5),
+      battery("bat_3", "Medium Battery", dice_count: 2, die_sides: 4, max_activations: 4),
       capacitor("cap_1", "Basic Capacitor", max_stored: 2),
       weapon("wpn_1", "Arm Blaster", damage_base: 0, damage_type: :energy, slots: 1),
       weapon("wpn_2", "Chassis Ram", damage_base: 1, damage_type: :kinetic, slots: 1),
@@ -25,8 +25,8 @@ defmodule Botgrade.Game.StarterDecks do
 
   def enemy_deck do
     [
-      battery("e_bat_1", "Rogue Battery", dice_count: 2, die_sides: 6, max_activations: 2),
-      battery("e_bat_2", "Rogue Battery", dice_count: 1, die_sides: 6, max_activations: 3),
+      battery("e_bat_1", "Rogue Battery", dice_count: 2, die_sides: 6, max_activations: 4),
+      battery("e_bat_2", "Rogue Battery", dice_count: 1, die_sides: 6, max_activations: 5),
       weapon("e_wpn_1", "Claw", damage_base: 1, damage_type: :kinetic, slots: 1),
       weapon("e_wpn_2", "Shock Emitter", damage_base: 0, damage_type: :energy, slots: 1),
       armor("e_arm_1", "Scrap Plating", shield_base: 0, armor_type: :plating, slots: 1),
