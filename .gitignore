@@ -1,0 +1,36 @@
+# Dependencies
+/deps/
+
+# Build
+/_build/
+
+# Generated on crash/test
+/tmp/
+erl_crash.dump
+*.ez
+
+# Assets
+/priv/static/assets/
+/assets/node_modules/
+
+# Mix
+/.fetch
+mix.lock.bak
+
+# Editor/OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Env
+.env
+*.pem
+
+# Windows artifact
+nul
+
+# Agents
+.chainlink
+.claude

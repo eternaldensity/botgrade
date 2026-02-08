@@ -1,0 +1,15 @@
+<Layouts.flash_group flash={@flash} />
+<div class="min-h-screen flex items-center justify-center bg-base-200">
+  <div class="text-center max-w-lg">
+    <h1 class="text-5xl font-bold text-base-content mb-4">BOTGRADE</h1>
+    <p class="text-xl text-base-content/70 mb-8">
+      A tactical robot card game. Build your deck from the wreckage of your enemies.
+    </p>
+    <form action="/combat/start" method="post">
+      <input type="hidden" name="_csrf_token" value={Phoenix.Controller.get_csrf_token()} />
+      <button type="submit" class="btn btn-primary btn-lg">
+        Start Combat
+      </button>
+    </form>
+  </div>
+</div>
