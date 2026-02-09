@@ -34,3 +34,6 @@ nul
 # Agents
 .chainlink
 .claude
+
+# Runtime data
+priv
