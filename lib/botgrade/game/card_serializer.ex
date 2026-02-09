@@ -24,8 +24,8 @@ defmodule Botgrade.Game.CardSerializer do
     %Card{
       id: map["id"],
       name: map["name"],
-      type: String.to_existing_atom(map["type"]),
-      damage: String.to_existing_atom(map["damage"]),
+      type: String.to_atom(map["type"]),
+      damage: String.to_atom(map["damage"]),
       properties: deserialize_properties(map["properties"]),
       dice_slots: Enum.map(map["dice_slots"] || [], &deserialize_dice_slot/1),
       current_hp: map["current_hp"]
@@ -63,17 +63,17 @@ defmodule Botgrade.Game.CardSerializer do
   defp deserialize_properties(nil), do: %{}
 
   defp deserialize_properties(props) do
-    Map.new(props, fn {k, v} -> {String.to_existing_atom(k), deserialize_prop_value(k, v)} end)
+    Map.new(props, fn {k, v} -> {String.to_atom(k), deserialize_prop_value(k, v)} end)
   end
 
-  defp deserialize_prop_value("damage_type", v), do: String.to_existing_atom(v)
-  defp deserialize_prop_value("armor_type", v), do: String.to_existing_atom(v)
+  defp deserialize_prop_value("damage_type", v), do: String.to_atom(v)
+  defp deserialize_prop_value("armor_type", v), do: String.to_atom(v)
   defp deserialize_prop_value("activated_this_turn", v), do: v
 
   defp deserialize_prop_value("targeting_profile", nil), do: nil
 
   defp deserialize_prop_value("targeting_profile", profile) do
-    Map.new(profile, fn {k, v} -> {String.to_existing_atom(k), v} end)
+    Map.new(profile, fn {k, v} -> {String.to_atom(k), v} end)
   end
 
   defp deserialize_prop_value("dual_mode", nil), do: nil
@@ -81,7 +81,7 @@ defmodule Botgrade.Game.CardSerializer do
   defp deserialize_prop_value("dual_mode", dm) do
     %{
       condition: deserialize_condition(dm["condition"]),
-      armor_type: String.to_existing_atom(dm["armor_type"]),
+      armor_type: String.to_atom(dm["armor_type"]),
       shield_base: dm["shield_base"]
     }
   end
@@ -116,7 +116,7 @@ defmodule Botgrade.Game.CardSerializer do
   defp deserialize_condition(nil), do: nil
   defp deserialize_condition("even"), do: :even
   defp deserialize_condition("odd"), do: :odd
-  defp deserialize_condition([tag, n]), do: {String.to_existing_atom(tag), n}
+  defp deserialize_condition([tag, n]), do: {String.to_atom(tag), n}
 
   # --- Dice ---
 
@@ -135,7 +135,7 @@ defmodule Botgrade.Game.CardSerializer do
   def deserialize_resources(nil), do: %{}
 
   def deserialize_resources(resources) do
-    Map.new(resources, fn {k, v} -> {String.to_existing_atom(k), v} end)
+    Map.new(resources, fn {k, v} -> {String.to_atom(k), v} end)
   end
 
   # --- Zone ---
@@ -150,7 +150,7 @@ defmodule Botgrade.Game.CardSerializer do
 
   def deserialize_zone(map) do
     %Zone{
-      type: String.to_existing_atom(map["type"]),
+      type: String.to_atom(map["type"]),
       danger_rating: map["danger_rating"],
       name: map["name"]
     }
@@ -179,7 +179,7 @@ defmodule Botgrade.Game.CardSerializer do
 
     %MapNode{
       id: map["id"],
-      type: String.to_existing_atom(map["type"]),
+      type: String.to_atom(map["type"]),
       position: {x, y},
       zone: deserialize_zone(map["zone"]),
       cleared: map["cleared"],

@@ -717,10 +717,15 @@ defmodule BotgradeWeb.CombatComponents do
           {if @result == :player_wins, do: "Enemy robot destroyed.", else: "Your robot has been destroyed."}
         </p>
         <div class="card-actions justify-center mt-4 gap-2">
-          <%!-- Campaign mode: Return to Map --%>
-          <button :if={@campaign_id} phx-click="return_to_map" class="btn btn-primary">
+          <%!-- Campaign victory: Return to Map --%>
+          <button :if={@campaign_id and @result == :player_wins} phx-click="return_to_map" class="btn btn-primary">
             <.icon name="hero-map" class="size-4" />
             Return to Map
+          </button>
+          <%!-- Campaign defeat: Campaign Over --%>
+          <button :if={@campaign_id and @result == :enemy_wins} phx-click="campaign_over" class="btn btn-error">
+            <.icon name="hero-x-mark" class="size-4" />
+            Campaign Over
           </button>
           <%!-- Standalone mode: Next Combat / New Game --%>
           <button :if={@result == :player_wins and is_nil(@campaign_id)} phx-click="next_combat" class="btn btn-primary">

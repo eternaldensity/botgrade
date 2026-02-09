@@ -113,6 +113,13 @@ defmodule BotgradeWeb.CombatLive do
   end
 
   @impl true
+  def handle_event("campaign_over", _params, socket) do
+    campaign_id = socket.assigns.campaign_id
+    Botgrade.Campaign.CampaignPersistence.delete_save(campaign_id)
+    {:noreply, push_navigate(socket, to: ~p"/")}
+  end
+
+  @impl true
   def handle_event("return_to_map", _params, socket) do
     campaign_id = socket.assigns.campaign_id
     player = socket.assigns.state.player
