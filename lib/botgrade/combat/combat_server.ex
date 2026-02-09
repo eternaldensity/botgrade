@@ -164,14 +164,25 @@ defmodule Botgrade.Combat.CombatServer do
 
   @impl true
   def handle_call(:end_turn, _from, state) do
-    new_state =
-      state
-      |> CombatLogic.end_turn()
-      |> maybe_enemy_turn()
-      |> maybe_draw_phase()
+    state_after_end = CombatLogic.end_turn(state)
 
-    broadcast(new_state)
-    {:reply, {:ok, new_state}, new_state}
+    case state_after_end do
+      %{result: :ongoing, phase: :enemy_turn} ->
+        {final_state, events} = CombatLogic.enemy_turn_with_events(state_after_end)
+        final_state = maybe_draw_phase(final_state)
+
+        schedule_enemy_events(state_after_end.id, events, 0)
+
+        total_delay = Enum.reduce(events, 0, fn {_s, d}, acc -> acc + d end)
+        Process.send_after(self(), {:broadcast_final, final_state}, total_delay)
+
+        {:reply, {:ok, final_state}, final_state}
+
+      _ ->
+        new_state = maybe_draw_phase(state_after_end)
+        broadcast(new_state)
+        {:reply, {:ok, new_state}, new_state}
+    end
   end
 
   @impl true
@@ -193,19 +204,34 @@ defmodule Botgrade.Combat.CombatServer do
     {:reply, {:ok, new_state}, new_state}
   end
 
-  # --- Private ---
+  # --- Timed Enemy Turn Events ---
 
-  defp maybe_enemy_turn(%{result: :ongoing, phase: :enemy_turn} = state) do
-    CombatLogic.enemy_turn(state)
+  @impl true
+  def handle_info({:broadcast_event, event_state}, state) do
+    broadcast(event_state)
+    {:noreply, state}
   end
 
-  defp maybe_enemy_turn(state), do: state
+  @impl true
+  def handle_info({:broadcast_final, final_state}, _state) do
+    broadcast(final_state)
+    {:noreply, final_state}
+  end
+
+  # --- Private ---
 
   defp maybe_draw_phase(%{result: :ongoing, phase: :draw} = state) do
     CombatLogic.draw_phase(state)
   end
 
   defp maybe_draw_phase(state), do: state
+
+  defp schedule_enemy_events(_combat_id, [], _offset), do: :ok
+
+  defp schedule_enemy_events(combat_id, [{event_state, delay} | rest], offset) do
+    Process.send_after(self(), {:broadcast_event, event_state}, offset)
+    schedule_enemy_events(combat_id, rest, offset + delay)
+  end
 
   defp broadcast(state) do
     Phoenix.PubSub.broadcast(Botgrade.PubSub, "combat:#{state.id}", {:state_updated, state})

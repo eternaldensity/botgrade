@@ -6,12 +6,12 @@
 * ~~number of active CPUs limited by number of batteries. (if you have 3 batteries and 5 CPUs the newest 2 can't be activated)~~ (cpu_has_power? checks battery count vs CPU position in installed list)
 
 # UI improvements
-* animate the enemy's turn, showing damage as it's dealt to your components like it does for their damge to yours
+* ~~animate the enemy's turn, showing damage as it's dealt to your components like it does for their damge to yours~~ (enemy turn broken into step-by-step timed broadcasts via Process.send_after in CombatServer)
 * ~~i don't think there's any need for a separate in-play area~~
-* some cards don't fully display what they do
-* it's hard to tell what salvaged cards will do
+* ~~some cards don't fully display what they do~~ (card_stats shows damage formulas, slot conditions, dual_mode info, CPU ability descriptions)
+* ~~it's hard to tell what salvaged cards will do~~ (scavenge panel uses card_detail_stats with damage penalty warnings and card HP)
 * display the shield and plating levels of opponent like for the player
-* make saves deletable
+* ~~make saves deletable~~ (delete button on home page with POST route and confirm dialog)
 
 # fixes
 

@@ -101,6 +101,9 @@ defmodule BotgradeWeb.CombatComponents do
         <span :if={@overclock_active} class="badge badge-sm badge-warning animate-pulse">
           OVERCLOCK
         </span>
+        <span :if={@phase == :enemy_turn} class="badge badge-sm badge-error animate-pulse">
+          Enemy attacking...
+        </span>
       </div>
 
       <div class="flex items-center gap-2">

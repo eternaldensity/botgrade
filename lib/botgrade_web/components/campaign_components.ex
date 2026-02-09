@@ -556,12 +556,21 @@ defmodule BotgradeWeb.CampaignComponents do
       :weapon ->
         dmg_type = Map.get(card.properties, :damage_type, :kinetic)
         base = Map.get(card.properties, :damage_base, 0)
-        "#{String.capitalize(to_string(dmg_type))} +#{base}"
+        slot_count = length(card.dice_slots)
+        dice_part = if slot_count == 1, do: "die", else: "#{slot_count} dice"
+        base_part = if base > 0, do: " + #{base}", else: ""
+        cond_part = slot_condition_summary(card)
+        dual_part = dual_mode_summary(card)
+        "#{String.capitalize(to_string(dmg_type))} #{dice_part}#{base_part}#{cond_part}#{dual_part}"
 
       :armor ->
         armor_type = Map.get(card.properties, :armor_type, :plating)
         base = Map.get(card.properties, :shield_base, 0)
-        "#{String.capitalize(to_string(armor_type))} +#{base}"
+        slot_count = length(card.dice_slots)
+        dice_part = if slot_count == 1, do: "die", else: "#{slot_count} dice"
+        base_part = if base > 0, do: " + #{base}", else: ""
+        cond_part = slot_condition_summary(card)
+        "#{String.capitalize(to_string(armor_type))} #{dice_part}#{base_part}#{cond_part}"
 
       :battery ->
         count = Map.get(card.properties, :dice_count, 1)
@@ -571,12 +580,61 @@ defmodule BotgradeWeb.CampaignComponents do
 
       :capacitor ->
         stored = Map.get(card.properties, :max_stored, 2)
-        "Stores #{stored} dice"
+        "Stores #{stored} dice (persist between turns)"
+
+      :cpu ->
+        cpu_ability_summary(Map.get(card.properties, :cpu_ability))
+
+      :chassis ->
+        "#{Map.get(card.properties, :card_hp, 0)} HP"
+
+      :locomotion ->
+        "Speed +#{Map.get(card.properties, :speed_base, 1)}"
 
       _ ->
         ""
     end
   end
+
+  defp slot_condition_summary(card) do
+    conditions =
+      card.dice_slots
+      |> Enum.filter(& &1.condition)
+      |> Enum.map(&condition_text(&1.condition))
+      |> Enum.uniq()
+
+    case conditions do
+      [] -> ""
+      [c] -> " (#{c})"
+      cs -> " (#{Enum.join(cs, ", ")})"
+    end
+  end
+
+  defp dual_mode_summary(card) do
+    case Map.get(card.properties, :dual_mode) do
+      nil -> ""
+      %{condition: cond, armor_type: type, shield_base: base} ->
+        type_name = String.capitalize(to_string(type))
+        cond_text = condition_text(cond)
+        base_text = if base > 0, do: " +#{base}", else: ""
+        " | If #{cond_text}: #{type_name}#{base_text}"
+    end
+  end
+
+  defp condition_text({:min, n}), do: "#{n}+"
+  defp condition_text({:max, n}), do: "#{n}-"
+  defp condition_text({:exact, n}), do: "=#{n}"
+  defp condition_text(:even), do: "even"
+  defp condition_text(:odd), do: "odd"
+  defp condition_text(nil), do: ""
+
+  defp cpu_ability_summary(%{type: :discard_draw, discard_count: d, draw_count: r}),
+    do: "Discard #{d}, Draw #{r}"
+  defp cpu_ability_summary(%{type: :reflex_block}), do: "Boost armor shield by +1"
+  defp cpu_ability_summary(%{type: :target_lock}), do: "Next weapon bypasses defenses"
+  defp cpu_ability_summary(%{type: :overclock_battery}), do: "Next battery activates twice"
+  defp cpu_ability_summary(%{type: :siphon_power}), do: "Spend 2 shield to restore a charge"
+  defp cpu_ability_summary(_), do: "Processing Unit"
 
   defp scrap_label(:metal), do: "Metal"
   defp scrap_label(:wire), do: "Wire"

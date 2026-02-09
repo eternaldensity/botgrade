@@ -474,6 +474,270 @@ defmodule Botgrade.Game.CombatLogic do
     |> next_turn()
   end
 
+  # --- Enemy Turn (with events for animation) ---
+
+  @spec enemy_turn_with_events(CombatState.t()) :: {CombatState.t(), [{CombatState.t(), non_neg_integer()}]}
+  def enemy_turn_with_events(%CombatState{phase: :enemy_turn} = state) do
+    events = []
+
+    # Draw phase
+    enemy = draw_cards(state.enemy, @enemy_draw_count)
+    state = %{state | enemy: enemy} |> add_log("Enemy draws #{length(enemy.hand)} cards.")
+    events = events ++ [{state, 400}]
+
+    # CPU pre-battery abilities (one event per activation)
+    {state, cpu_events} = ai_use_cpu_ability_with_events(state, :pre_battery, 600)
+    events = events ++ cpu_events
+
+    # Battery activations (one event per battery)
+    {state, bat_events} = activate_all_batteries_with_events(state)
+    events = events ++ bat_events
+
+    # CPU post-battery abilities
+    {state, cpu_events} = ai_use_cpu_ability_with_events(state, :post_battery, 600)
+    events = events ++ cpu_events
+
+    # Dice allocation (single event)
+    state = ai_allocate_dice(state)
+    events = events ++ [{state, 400}]
+
+    # Armor resolution (one event per armor)
+    {state, armor_events} = resolve_armor_with_events(state, :enemy)
+    events = events ++ armor_events
+
+    # Weapon resolution (one event per weapon hit)
+    {state, weapon_events} = resolve_weapons_with_events(state, :enemy)
+    events = events ++ weapon_events
+
+    # Cleanup + check victory + next turn
+    state = state |> cleanup_turn(:enemy) |> check_victory() |> next_turn()
+    events = events ++ [{state, 0}]
+
+    {state, events}
+  end
+
+  defp activate_all_batteries_with_events(state) do
+    batteries =
+      state.enemy.hand
+      |> Enum.filter(&(&1.type == :battery))
+      |> Enum.filter(&(&1.damage != :destroyed))
+      |> Enum.filter(&(&1.properties.remaining_activations > 0))
+
+    {state, events} =
+      Enum.reduce(batteries, {state, []}, fn battery, {acc_state, acc_events} ->
+        acc_state = activate_enemy_battery(acc_state, battery)
+        {acc_state, acc_events ++ [{acc_state, 500}]}
+      end)
+
+    # Overclock
+    if state.overclock_active do
+      overclock_target =
+        state.enemy.hand
+        |> Enum.find(fn card ->
+          card.type == :battery and card.damage != :destroyed and
+            card.properties.remaining_activations > 0
+        end)
+
+      if overclock_target do
+        state =
+          state
+          |> add_log("Overclock: #{overclock_target.name} activates again!")
+          |> activate_enemy_battery(overclock_target)
+          |> Map.put(:overclock_active, false)
+
+        {state, events ++ [{state, 500}]}
+      else
+        {%{state | overclock_active: false}, events}
+      end
+    else
+      {state, events}
+    end
+  end
+
+  defp ai_use_cpu_ability_with_events(state, phase, delay) do
+    cpus =
+      state.enemy.installed
+      |> Enum.filter(fn card ->
+        card.type == :cpu and
+          card.damage != :destroyed and
+          not Map.get(card.properties, :activated_this_turn, false) and
+          Map.has_key?(card.properties, :cpu_ability)
+      end)
+      |> Enum.filter(&cpu_has_power?(state.enemy, &1))
+
+    pre_battery = [:overclock_battery]
+
+    cpus =
+      case phase do
+        :pre_battery -> Enum.filter(cpus, &(&1.properties.cpu_ability.type in pre_battery))
+        :post_battery -> Enum.reject(cpus, &(&1.properties.cpu_ability.type in pre_battery))
+      end
+
+    Enum.reduce(cpus, {state, []}, fn cpu_card, {acc_state, acc_events} ->
+      acc_state =
+        if cpu_card.damage == :damaged and :rand.uniform(3) == 1 do
+          combatant = mark_cpu_activated(acc_state.enemy, cpu_card)
+          acc_state = %{acc_state | enemy: combatant}
+          add_log(acc_state, "Enemy #{cpu_card.name} malfunctions! Ability failed (damaged).")
+        else
+          ai_execute_cpu_ability(acc_state, cpu_card, cpu_card.properties.cpu_ability)
+        end
+
+      {acc_state, acc_events ++ [{acc_state, delay}]}
+    end)
+  end
+
+  defp resolve_armor_with_events(state, who) do
+    {combatant, _defender} = get_combatants(state, who)
+    who_name = if who == :player, do: "You", else: "Enemy"
+
+    armor_cards =
+      combatant.hand
+      |> Enum.filter(&(&1.type == :armor))
+      |> Enum.filter(fn card ->
+        card.damage != :destroyed and
+          Enum.any?(card.dice_slots, fn slot -> slot.assigned_die != nil end)
+      end)
+
+    Enum.reduce(armor_cards, {state, []}, fn armor, {acc_state, acc_events} ->
+      {comb, _} = get_combatants(acc_state, who)
+
+      shield_base = armor.properties.shield_base + Map.get(armor.properties, :shield_base_bonus, 0)
+
+      raw_value =
+        armor.dice_slots
+        |> Enum.filter(&(&1.assigned_die != nil))
+        |> Enum.reduce(shield_base, fn slot, acc -> acc + slot.assigned_die.value end)
+
+      value = apply_damage_penalty(raw_value, armor)
+
+      penalty_msg =
+        if armor.damage == :damaged and raw_value != value,
+          do: " (halved from #{raw_value} - damaged)",
+          else: ""
+
+      {comb, log_msg} =
+        case armor.properties.armor_type do
+          :plating ->
+            comb = %{comb | plating: comb.plating + value}
+            {comb, "#{who_name} activates #{armor.name}: +#{value} plating#{penalty_msg}."}
+
+          :shield ->
+            comb = %{comb | shield: comb.shield + value}
+            {comb, "#{who_name} activates #{armor.name}: +#{value} shield#{penalty_msg}."}
+        end
+
+      acc_state =
+        if who == :player,
+          do: %{acc_state | player: comb},
+          else: %{acc_state | enemy: comb}
+
+      acc_state = add_log(acc_state, log_msg)
+      {acc_state, acc_events ++ [{acc_state, 500}]}
+    end)
+  end
+
+  defp resolve_weapons_with_events(state, who) do
+    {attacker, _defender} = get_combatants(state, who)
+    who_name = if who == :player, do: "You", else: "Enemy"
+
+    weapons =
+      attacker.hand
+      |> Enum.filter(&(&1.type == :weapon))
+      |> Enum.filter(fn card ->
+        card.damage != :destroyed and
+          Enum.any?(card.dice_slots, fn slot -> slot.assigned_die != nil end)
+      end)
+
+    Enum.reduce(weapons, {state, []}, fn weapon, {acc_state, acc_events} ->
+      {att, def_r} = get_combatants(acc_state, who)
+      dual_mode = Map.get(weapon.properties, :dual_mode)
+
+      dice_values =
+        weapon.dice_slots
+        |> Enum.filter(&(&1.assigned_die != nil))
+        |> Enum.map(& &1.assigned_die.value)
+
+      acc_state =
+        if dual_mode && Enum.all?(dice_values, &Card.meets_condition?(dual_mode.condition, &1)) do
+          raw_value = Enum.reduce(dice_values, dual_mode.shield_base, &(&1 + &2))
+          value = apply_damage_penalty(raw_value, weapon)
+
+          penalty_msg =
+            if weapon.damage == :damaged and raw_value != value,
+              do: " (halved from #{raw_value} - damaged)",
+              else: ""
+
+          {att, log_msg} =
+            case dual_mode.armor_type do
+              :plating ->
+                att = %{att | plating: att.plating + value}
+                {att, "#{who_name} activates #{weapon.name} (defense mode): +#{value} plating#{penalty_msg}."}
+
+              :shield ->
+                att = %{att | shield: att.shield + value}
+                {att, "#{who_name} activates #{weapon.name} (defense mode): +#{value} shield#{penalty_msg}."}
+            end
+
+          acc_state = put_combatants(acc_state, who, att, def_r)
+          add_log(acc_state, log_msg)
+        else
+          raw_damage = calculate_weapon_damage(weapon)
+          total_damage = apply_damage_penalty(raw_damage, weapon)
+
+          penalty_msg =
+            if weapon.damage == :damaged and raw_damage != total_damage,
+              do: " (halved from #{raw_damage} - damaged)",
+              else: ""
+
+          targeting_profile = Map.get(weapon.properties, :targeting_profile)
+          targetable = Targeting.targetable_cards(def_r)
+
+          case Targeting.select_target(targeting_profile, targetable) do
+            nil ->
+              add_log(acc_state, "#{who_name} fires #{weapon.name} but finds no target!")
+
+            target ->
+              damage_type = weapon.properties.damage_type
+              tl = acc_state.target_lock_active
+
+              {def_r, updated_target, card_dmg, absorb_msg, tl} =
+                if tl do
+                  new_hp = max(0, target.current_hp - total_damage)
+                  updated = %{target | current_hp: new_hp} |> Card.sync_damage_state()
+                  {def_r, updated, total_damage, " (TARGET LOCK - defenses bypassed)", false}
+                else
+                  {d, t, c, a} = Damage.apply_typed_damage(def_r, target, total_damage, damage_type)
+                  {d, t, c, a, tl}
+                end
+
+              def_r = update_card_in_zones(def_r, target.id, updated_target)
+
+              destroyed_msg = if updated_target.current_hp <= 0, do: " DESTROYED!", else: ""
+
+              damaged_msg =
+                if updated_target.damage == :damaged and target.damage != :damaged,
+                  do: " (damaged)",
+                  else: ""
+
+              type_label = damage_type_label(damage_type)
+
+              log_msg =
+                "#{who_name} fires #{weapon.name} (#{type_label}) for #{total_damage}#{penalty_msg}" <>
+                  " -> hits #{target.name}#{absorb_msg}." <>
+                  " #{card_dmg} to #{target.name}#{damaged_msg}#{destroyed_msg}"
+
+              acc_state = put_combatants(acc_state, who, att, def_r)
+              acc_state = %{acc_state | target_lock_active: tl}
+              acc_state = %{acc_state | last_attack_result: %{weapon: weapon.name, target: target.id, damage: card_dmg}}
+              add_log(acc_state, log_msg)
+          end
+        end
+
+      {acc_state, acc_events ++ [{acc_state, 800}]}
+    end)
+  end
+
   # --- Immediate Card Activation (for player during :power_up) ---
 
   defp activate_card(state, card, who) do
