@@ -68,6 +68,7 @@ defmodule Botgrade.Game.ScavengeLogic do
     all_player_cards =
       (player.installed ++ player.deck ++ player.hand ++ player.discard ++ player.in_play ++ taken_cards)
       |> Enum.reject(&(&1.damage == :destroyed))
+      |> Enum.map(&reset_card_state/1)
     merged_resources = ScrapLogic.merge_resources(player.resources, state.scavenge_scraps)
     updated_player = %{player | deck: all_player_cards, hand: [], discard: [], in_play: [], installed: [], resources: merged_resources}
 
@@ -101,7 +102,10 @@ defmodule Botgrade.Game.ScavengeLogic do
   end
 
   defp reset_card_state(card) do
-    card = %{card | dice_slots: Enum.map(card.dice_slots, &%{&1 | assigned_die: nil})}
+    card = %{card |
+      dice_slots: Enum.map(card.dice_slots, &%{&1 | assigned_die: nil}),
+      last_result: nil
+    }
 
     # Set current_hp to match damage state
     max_hp = Map.get(card.properties, :card_hp, 2)
@@ -113,13 +117,14 @@ defmodule Botgrade.Game.ScavengeLogic do
         :destroyed -> %{card | current_hp: 0}
       end
 
+    props = Map.delete(card.properties, :overkill)
+
     case card.type do
       :battery ->
-        props = card.properties
         %{card | properties: %{props | remaining_activations: props.max_activations} |> Map.delete(:activated_this_turn)}
 
       _ ->
-        card
+        %{card | properties: props}
     end
   end
 
