@@ -7,6 +7,26 @@
     </p>
     <form action="/combat/start" method="post">
       <input type="hidden" name="_csrf_token" value={Phoenix.Controller.get_csrf_token()} />
+
+      <div class="space-y-2 mb-6 text-left">
+        <p class="text-sm font-semibold text-base-content/80 text-center mb-3">Choose your opponent:</p>
+        <%= for {id, name, desc} <- Botgrade.Game.StarterDecks.enemy_types() do %>
+          <label class="flex items-start gap-3 p-3 rounded-lg border border-base-300 hover:border-primary cursor-pointer transition-colors has-[:checked]:border-primary has-[:checked]:bg-primary/5">
+            <input
+              type="radio"
+              name="enemy_type"
+              value={id}
+              class="radio radio-primary mt-0.5"
+              checked={id == "rogue"}
+            />
+            <div>
+              <div class="font-semibold text-base-content"><%= name %></div>
+              <div class="text-sm text-base-content/60"><%= desc %></div>
+            </div>
+          </label>
+        <% end %>
+      </div>
+
       <button type="submit" class="btn btn-primary btn-lg">
         Start Combat
       </button>

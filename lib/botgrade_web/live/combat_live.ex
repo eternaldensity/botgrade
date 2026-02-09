@@ -110,15 +110,21 @@ defmodule BotgradeWeb.CombatLive do
     player = socket.assigns.state.player
     player_cards = player.installed ++ player.deck ++ player.hand ++ player.discard ++ player.in_play
     combat_id = Base.encode16(:crypto.strong_rand_bytes(4), case: :lower)
-    {:ok, _pid} = CombatSupervisor.start_combat(combat_id, player_cards: player_cards, player_resources: player.resources)
+
+    {enemy_type, _name, _desc} = Enum.random(Botgrade.Game.StarterDecks.enemy_types())
+    enemy_cards = Botgrade.Game.StarterDecks.enemy_deck(enemy_type)
+
+    {:ok, _pid} = CombatSupervisor.start_combat(combat_id,
+      player_cards: player_cards,
+      player_resources: player.resources,
+      enemy_cards: enemy_cards
+    )
     {:noreply, push_navigate(socket, to: ~p"/combat/#{combat_id}")}
   end
 
   @impl true
   def handle_event("new_combat", _params, socket) do
-    combat_id = Base.encode16(:crypto.strong_rand_bytes(4), case: :lower)
-    {:ok, _pid} = CombatSupervisor.start_combat(combat_id)
-    {:noreply, push_navigate(socket, to: ~p"/combat/#{combat_id}")}
+    {:noreply, push_navigate(socket, to: ~p"/")}
   end
 
   # --- Render ---

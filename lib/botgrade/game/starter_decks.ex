@@ -63,6 +63,189 @@ defmodule Botgrade.Game.StarterDecks do
     ]
   end
 
+  @doc "Returns enemy cards for the given type string."
+  def enemy_deck("ironclad"), do: enemy_ironclad()
+  def enemy_deck("strikebolt"), do: enemy_strikebolt()
+  def enemy_deck("hexapod"), do: enemy_hexapod()
+  def enemy_deck(_), do: enemy_deck()
+
+  @doc "Returns available enemy types as {id, name, description} tuples."
+  def enemy_types do
+    [
+      {"rogue", "Rogue Bot", "A basic scavenger bot. Balanced and predictable."},
+      {"ironclad", "Ironclad", "Heavy tank with massive armor and crushing kinetic weapons."},
+      {"strikebolt", "Strikebolt", "Fast glass cannon with three weapons and fragile components."},
+      {"hexapod", "Hexapod", "Versatile six-legged bot with all three damage types."}
+    ]
+  end
+
+  # --- Enemy: Ironclad (Heavy/Tank) ---
+  # Total chassis HP: 14. Double plating, all kinetic. Counter with energy weapons.
+
+  def enemy_ironclad do
+    [
+      battery("e_bat_1", "Ironclad Dynamo", dice_count: 1, die_sides: 6, max_activations: 5, card_hp: 3),
+      battery("e_bat_2", "Ironclad Dynamo", dice_count: 1, die_sides: 6, max_activations: 5, card_hp: 3),
+      weapon("e_wpn_1", "Siege Hammer",
+        damage_base: 2,
+        damage_type: :kinetic,
+        slots: 2,
+        card_hp: 4,
+        targeting: %{chassis: 40, armor: 20, weapon: 15, battery: 10, locomotion: 10, capacitor: 3, cpu: 2}
+      ),
+      weapon("e_wpn_2", "Grinder Claw",
+        damage_base: 1,
+        damage_type: :kinetic,
+        slots: 1,
+        card_hp: 3,
+        targeting: %{armor: 30, weapon: 20, chassis: 20, battery: 10, locomotion: 10, capacitor: 5, cpu: 5}
+      ),
+      armor("e_arm_1", "Ironclad Plate", shield_base: 1, armor_type: :plating, slots: 1, card_hp: 4),
+      armor("e_arm_2", "Scrap Barrier", shield_base: 0, armor_type: :plating, slots: 1, card_hp: 3),
+      chassis("e_chs_1", "Ironclad Core", card_hp: 5),
+      chassis("e_chs_2", "Ironclad Frame", card_hp: 5),
+      chassis("e_chs_3", "Reinforced Plate", card_hp: 4),
+      cpu("e_cpu_1", "Ironclad CPU", card_hp: 3),
+      locomotion("e_loc_1", "Heavy Treads", speed_base: 1, card_hp: 3)
+    ]
+  end
+
+  # --- Enemy: Strikebolt (Fast/Glass Cannon) ---
+  # Total chassis HP: 5. Three weapons, three batteries, everything fragile.
+
+  def enemy_strikebolt do
+    [
+      battery("e_bat_1", "Strikebolt Cell", dice_count: 2, die_sides: 4, max_activations: 4, card_hp: 1),
+      battery("e_bat_2", "Strikebolt Cell", dice_count: 1, die_sides: 6, max_activations: 4, card_hp: 1),
+      battery("e_bat_3", "Overcharge Pack", dice_count: 1, die_sides: 6, max_activations: 3, card_hp: 1),
+      weapon("e_wpn_1", "Pulse Blaster",
+        damage_base: 0,
+        damage_type: :energy,
+        slots: 1,
+        card_hp: 2,
+        targeting: %{battery: 30, weapon: 20, capacitor: 15, armor: 10, cpu: 10, chassis: 10, locomotion: 5}
+      ),
+      weapon("e_wpn_2", "Spike Launcher",
+        damage_base: 1,
+        damage_type: :kinetic,
+        slots: 1,
+        card_hp: 2,
+        targeting: %{weapon: 25, battery: 20, armor: 15, chassis: 15, capacitor: 10, cpu: 10, locomotion: 5}
+      ),
+      weapon("e_wpn_3", "Arc Discharger",
+        damage_base: 0,
+        damage_type: :energy,
+        slots: 1,
+        card_hp: 2,
+        condition: {:min, 3},
+        targeting: %{cpu: 40, battery: 20, capacitor: 15, weapon: 10, armor: 5, chassis: 5, locomotion: 5}
+      ),
+      armor("e_arm_1", "Flicker Shield",
+        shield_base: 1,
+        armor_type: :shield,
+        slots: 1,
+        card_hp: 1,
+        condition: {:min, 4}
+      ),
+      chassis("e_chs_1", "Strikebolt Frame", card_hp: 3),
+      chassis("e_chs_2", "Light Frame", card_hp: 2),
+      cpu("e_cpu_1", "Strikebolt CPU", card_hp: 1),
+      locomotion("e_loc_1", "Sprint Jets", speed_base: 3, card_hp: 1)
+    ]
+  end
+
+  # --- Enemy: Hexapod (Balanced/Versatile) ---
+  # Total chassis HP: 9. All three damage types, mixed defenses.
+
+  def enemy_hexapod do
+    [
+      battery("e_bat_1", "Hexapod Reactor", dice_count: 2, die_sides: 6, max_activations: 4, card_hp: 2),
+      battery("e_bat_2", "Aux Cell", dice_count: 1, die_sides: 4, max_activations: 5, card_hp: 2),
+      weapon("e_wpn_1", "Chem Sprayer",
+        damage_base: 0,
+        damage_type: :plasma,
+        slots: 1,
+        card_hp: 2,
+        condition: :even,
+        targeting: %{chassis: 30, weapon: 20, armor: 15, battery: 15, cpu: 10, capacitor: 5, locomotion: 5}
+      ),
+      weapon("e_wpn_2", "Pincer Strike",
+        damage_base: 1,
+        damage_type: :kinetic,
+        slots: 1,
+        card_hp: 3,
+        targeting: %{armor: 25, chassis: 20, weapon: 20, battery: 15, locomotion: 10, capacitor: 5, cpu: 5}
+      ),
+      weapon("e_wpn_3", "Beam Array",
+        damage_base: 0,
+        damage_type: :energy,
+        slots: 1,
+        card_hp: 2,
+        condition: {:min, 4},
+        targeting: %{battery: 25, capacitor: 20, cpu: 20, weapon: 15, armor: 10, chassis: 5, locomotion: 5}
+      ),
+      armor("e_arm_1", "Chitin Plating", shield_base: 0, armor_type: :plating, slots: 1, card_hp: 3),
+      armor("e_arm_2", "Refraction Field",
+        shield_base: 1,
+        armor_type: :shield,
+        slots: 1,
+        card_hp: 2,
+        condition: :odd
+      ),
+      chassis("e_chs_1", "Hexapod Core", card_hp: 4),
+      chassis("e_chs_2", "Hexapod Segment", card_hp: 3),
+      chassis("e_chs_3", "Leg Segment", card_hp: 2),
+      cpu("e_cpu_1", "Hexapod Brain", card_hp: 2),
+      locomotion("e_loc_1", "Six Legs", speed_base: 2, card_hp: 2)
+    ]
+  end
+
+  # --- Expanded Card Pool (for future deck-building/shop features) ---
+
+  def expanded_card_pool do
+    [
+      weapon("wpn_plasma_cutter", "Plasma Cutter",
+        damage_base: 0,
+        damage_type: :plasma,
+        slots: 1,
+        card_hp: 2,
+        condition: :odd,
+        targeting: %{chassis: 35, weapon: 20, armor: 15, battery: 10, capacitor: 5, locomotion: 10, cpu: 5}
+      ),
+      weapon("wpn_twin_repeater", "Twin Repeater",
+        damage_base: 0,
+        damage_type: :kinetic,
+        slots: 2,
+        card_hp: 3,
+        targeting: %{armor: 30, chassis: 20, weapon: 15, battery: 15, locomotion: 10, capacitor: 5, cpu: 5}
+      ),
+      weapon("wpn_precision_laser", "Precision Laser",
+        damage_base: 2,
+        damage_type: :energy,
+        slots: 1,
+        card_hp: 2,
+        condition: {:min, 5},
+        targeting: %{cpu: 35, battery: 25, capacitor: 20, weapon: 10, armor: 5, chassis: 3, locomotion: 2}
+      ),
+      battery("bat_surge", "Surge Cell", dice_count: 3, die_sides: 4, max_activations: 3, card_hp: 2),
+      battery("bat_heavy_reactor", "Heavy Reactor", dice_count: 1, die_sides: 8, max_activations: 3, card_hp: 4),
+      capacitor("cap_flux", "Flux Capacitor", max_stored: 3, card_hp: 3),
+      armor("arm_reactive_plating", "Reactive Plating",
+        shield_base: 1,
+        armor_type: :plating,
+        slots: 2,
+        card_hp: 4
+      ),
+      armor("arm_phase_shield", "Phase Shield",
+        shield_base: 2,
+        armor_type: :shield,
+        slots: 1,
+        card_hp: 2,
+        condition: :even
+      )
+    ]
+  end
+
   defp battery(id, name, opts) do
     %Card{
       id: id,

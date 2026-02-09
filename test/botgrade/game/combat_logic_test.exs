@@ -1,7 +1,7 @@
 defmodule Botgrade.Game.CombatLogicTest do
   use ExUnit.Case, async: true
 
-  alias Botgrade.Game.{CombatLogic, CombatState, Card, StarterDecks}
+  alias Botgrade.Game.{CombatLogic, CombatState, Card, Robot, StarterDecks}
 
   defp new_combat do
     CombatLogic.new_combat("test", StarterDecks.player_deck(), StarterDecks.enemy_deck())
@@ -14,20 +14,20 @@ defmodule Botgrade.Game.CombatLogicTest do
       assert state.phase == :draw
       assert state.turn_number == 1
       assert state.result == :ongoing
-      assert state.player.total_hp == 9
-      assert state.player.current_hp == 9
-      assert state.enemy.total_hp == 9
-      assert state.enemy.current_hp == 9
+      assert Robot.total_hp(state.player) == 11
+      assert Robot.current_hp(state.player) == 11
+      assert Robot.total_hp(state.enemy) == 9
+      assert Robot.current_hp(state.enemy) == 9
     end
 
-    test "player deck has 12 cards" do
+    test "player deck has 8 non-installed cards" do
       state = new_combat()
-      assert length(state.player.deck) == 12
+      assert length(state.player.deck) == 8
     end
 
-    test "enemy deck has 7 cards" do
+    test "enemy deck has 5 non-installed cards" do
       state = new_combat()
-      assert length(state.enemy.deck) == 7
+      assert length(state.enemy.deck) == 5
     end
 
     test "robots start with zero plating" do
@@ -41,7 +41,7 @@ defmodule Botgrade.Game.CombatLogicTest do
     test "draws 5 cards into hand and transitions to power_up" do
       state = new_combat() |> CombatLogic.draw_phase()
       assert length(state.player.hand) == 5
-      assert length(state.player.deck) == 7
+      assert length(state.player.deck) == 3
       assert state.phase == :power_up
     end
   end
@@ -99,14 +99,12 @@ defmodule Botgrade.Game.CombatLogicTest do
           name: "Player",
           hand: [weapon, conditioned_weapon],
           available_dice: [%{sides: 6, value: 5}, %{sides: 6, value: 2}],
-          total_hp: 9,
-          current_hp: 9
+          installed: [%Card{id: "chs", name: "Frame", type: :chassis, properties: %{card_hp: 9}, dice_slots: [], current_hp: 9}]
         },
         enemy: %Botgrade.Game.Robot{
           id: "enemy",
           name: "Enemy",
-          total_hp: 9,
-          current_hp: 9
+          installed: [%Card{id: "chs", name: "Frame", type: :chassis, properties: %{card_hp: 9}, dice_slots: [], current_hp: 9}]
         },
         phase: :power_up
       }
@@ -118,7 +116,7 @@ defmodule Botgrade.Game.CombatLogicTest do
       {:ok, new_state} = CombatLogic.allocate_die(state, 0, "wpn_test", "power_1")
       # Weapon has 1 slot, so filling it triggers immediate activation
       # Card moves to in_play with cleared slots, enemy takes 5 damage
-      assert new_state.enemy.current_hp == 4
+      assert Robot.current_hp(new_state.enemy) == 4
       assert length(new_state.player.available_dice) == 1
       # Card should be in in_play now
       assert Enum.any?(new_state.player.in_play, &(&1.id == "wpn_test"))
@@ -154,21 +152,19 @@ defmodule Botgrade.Game.CombatLogicTest do
           name: "Player",
           hand: [weapon],
           available_dice: [%{sides: 6, value: 4}],
-          total_hp: 9,
-          current_hp: 9
+          installed: [%Card{id: "chs", name: "Frame", type: :chassis, properties: %{card_hp: 9}, dice_slots: [], current_hp: 9}]
         },
         enemy: %Botgrade.Game.Robot{
           id: "enemy",
           name: "Enemy",
-          total_hp: 9,
-          current_hp: 9
+          installed: [%Card{id: "chs", name: "Frame", type: :chassis, properties: %{card_hp: 9}, dice_slots: [], current_hp: 9}]
         },
         phase: :power_up
       }
 
       {:ok, new_state} = CombatLogic.allocate_die(state, 0, "wpn_test", "power_1")
       # damage = die value 4 + base 1 = 5
-      assert new_state.enemy.current_hp == 4
+      assert Robot.current_hp(new_state.enemy) == 4
     end
 
     test "armor with plating type adds to plating pool" do
@@ -187,15 +183,13 @@ defmodule Botgrade.Game.CombatLogicTest do
           name: "Player",
           hand: [armor],
           available_dice: [%{sides: 6, value: 3}],
-          total_hp: 9,
-          current_hp: 9,
+          installed: [%Card{id: "chs", name: "Frame", type: :chassis, properties: %{card_hp: 9}, dice_slots: [], current_hp: 9}],
           plating: 0
         },
         enemy: %Botgrade.Game.Robot{
           id: "enemy",
           name: "Enemy",
-          total_hp: 9,
-          current_hp: 9
+          installed: [%Card{id: "chs", name: "Frame", type: :chassis, properties: %{card_hp: 9}, dice_slots: [], current_hp: 9}]
         },
         phase: :power_up
       }
@@ -221,14 +215,12 @@ defmodule Botgrade.Game.CombatLogicTest do
           name: "Player",
           hand: [armor],
           available_dice: [%{sides: 6, value: 3}],
-          total_hp: 9,
-          current_hp: 9
+          installed: [%Card{id: "chs", name: "Frame", type: :chassis, properties: %{card_hp: 9}, dice_slots: [], current_hp: 9}]
         },
         enemy: %Botgrade.Game.Robot{
           id: "enemy",
           name: "Enemy",
-          total_hp: 9,
-          current_hp: 9
+          installed: [%Card{id: "chs", name: "Frame", type: :chassis, properties: %{card_hp: 9}, dice_slots: [], current_hp: 9}]
         },
         phase: :power_up
       }
@@ -254,20 +246,18 @@ defmodule Botgrade.Game.CombatLogicTest do
           name: "Player",
           hand: [weapon],
           available_dice: [%{sides: 6, value: 6}],
-          total_hp: 9,
-          current_hp: 9
+          installed: [%Card{id: "chs", name: "Frame", type: :chassis, properties: %{card_hp: 9}, dice_slots: [], current_hp: 9}]
         },
         enemy: %Botgrade.Game.Robot{
           id: "enemy",
           name: "Enemy",
-          total_hp: 5,
-          current_hp: 5
+          installed: [%Card{id: "chs", name: "Frame", type: :chassis, properties: %{card_hp: 5}, dice_slots: [], current_hp: 5}]
         },
         phase: :power_up
       }
 
       {:ok, new_state} = CombatLogic.allocate_die(state, 0, "wpn_test", "power_1")
-      assert new_state.enemy.current_hp == 0
+      assert Robot.current_hp(new_state.enemy) == 0
       # Victory is checked during end_turn, not during immediate activation
       # The weapon fires and deals damage but the game continues in power_up
       # until end_turn is called
@@ -291,14 +281,12 @@ defmodule Botgrade.Game.CombatLogicTest do
           name: "Player",
           hand: [weapon],
           available_dice: [%{sides: 6, value: 6}],
-          total_hp: 9,
-          current_hp: 9
+          installed: [%Card{id: "chs", name: "Frame", type: :chassis, properties: %{card_hp: 9}, dice_slots: [], current_hp: 9}]
         },
         enemy: %Botgrade.Game.Robot{
           id: "enemy",
           name: "Enemy",
-          total_hp: 9,
-          current_hp: 9,
+          installed: [%Card{id: "chs", name: "Frame", type: :chassis, properties: %{card_hp: 9}, dice_slots: [], current_hp: 9}],
           plating: 2,
           shield: 1
         },
@@ -306,10 +294,10 @@ defmodule Botgrade.Game.CombatLogicTest do
       }
 
       {:ok, new_state} = CombatLogic.allocate_die(state, 0, "wpn_test", "power_1")
-      # 6 damage: 2 absorbed by plating, 1 by shield, 3 to HP
-      assert new_state.enemy.plating == 0
+      # 6 energy damage: plating absorbs 0.25*2=0, shield absorbs 1, 5 to HP
+      assert new_state.enemy.plating == 2
       assert new_state.enemy.shield == 0
-      assert new_state.enemy.current_hp == 6
+      assert Robot.current_hp(new_state.enemy) == 4
     end
 
     test "shield resets at end of turn but plating persists" do
@@ -319,16 +307,14 @@ defmodule Botgrade.Game.CombatLogicTest do
           id: "player",
           name: "Player",
           hand: [],
-          total_hp: 9,
-          current_hp: 9,
+          installed: [%Card{id: "chs", name: "Frame", type: :chassis, properties: %{card_hp: 9}, dice_slots: [], current_hp: 9}],
           plating: 5,
           shield: 3
         },
         enemy: %Botgrade.Game.Robot{
           id: "enemy",
           name: "Enemy",
-          total_hp: 9,
-          current_hp: 9
+          installed: [%Card{id: "chs", name: "Frame", type: :chassis, properties: %{card_hp: 9}, dice_slots: [], current_hp: 9}]
         },
         phase: :power_up
       }
@@ -340,6 +326,41 @@ defmodule Botgrade.Game.CombatLogicTest do
     end
   end
 
+  describe "enemy deck variants" do
+    test "ironclad deck produces valid combat state" do
+      state = CombatLogic.new_combat("test", StarterDecks.player_deck(), StarterDecks.enemy_ironclad())
+      assert state.result == :ongoing
+      assert length(state.enemy.installed) > 0
+      assert Enum.any?(state.enemy.installed, &(&1.type == :chassis))
+    end
+
+    test "strikebolt deck produces valid combat state" do
+      state = CombatLogic.new_combat("test", StarterDecks.player_deck(), StarterDecks.enemy_strikebolt())
+      assert state.result == :ongoing
+      assert length(state.enemy.installed) > 0
+      assert Enum.any?(state.enemy.installed, &(&1.type == :chassis))
+    end
+
+    test "hexapod deck produces valid combat state" do
+      state = CombatLogic.new_combat("test", StarterDecks.player_deck(), StarterDecks.enemy_hexapod())
+      assert state.result == :ongoing
+      assert length(state.enemy.installed) > 0
+      assert Enum.any?(state.enemy.installed, &(&1.type == :chassis))
+    end
+
+    test "enemy_deck/1 dispatches to correct deck" do
+      assert StarterDecks.enemy_deck("ironclad") == StarterDecks.enemy_ironclad()
+      assert StarterDecks.enemy_deck("strikebolt") == StarterDecks.enemy_strikebolt()
+      assert StarterDecks.enemy_deck("hexapod") == StarterDecks.enemy_hexapod()
+      assert StarterDecks.enemy_deck("unknown") == StarterDecks.enemy_deck()
+    end
+
+    test "expanded_card_pool returns 8 cards" do
+      pool = StarterDecks.expanded_card_pool()
+      assert length(pool) == 8
+    end
+  end
+
   describe "end_turn/1" do
     test "transitions to enemy_turn when ongoing" do
       state = %CombatState{
@@ -348,14 +369,24 @@ defmodule Botgrade.Game.CombatLogicTest do
           id: "player",
           name: "Player",
           hand: [],
-          total_hp: 9,
-          current_hp: 9
+          installed: [
+            %Card{id: "p_chs", name: "Frame", type: :chassis, properties: %{card_hp: 9}, dice_slots: [], current_hp: 9},
+            %Card{id: "p_loc", name: "Treads", type: :locomotion, properties: %{speed_base: 1, card_hp: 2}, dice_slots: [], current_hp: 2}
+          ],
+          deck: [
+            %Card{id: "p_wpn", name: "Blaster", type: :weapon, properties: %{damage_base: 0, damage_type: :energy, card_hp: 3}, dice_slots: [%{id: "power_1", condition: nil, assigned_die: nil}], current_hp: 3}
+          ]
         },
         enemy: %Botgrade.Game.Robot{
           id: "enemy",
           name: "Enemy",
-          total_hp: 9,
-          current_hp: 9
+          installed: [
+            %Card{id: "e_chs", name: "Frame", type: :chassis, properties: %{card_hp: 9}, dice_slots: [], current_hp: 9},
+            %Card{id: "e_loc", name: "Treads", type: :locomotion, properties: %{speed_base: 1, card_hp: 2}, dice_slots: [], current_hp: 2}
+          ],
+          deck: [
+            %Card{id: "e_wpn", name: "Claw", type: :weapon, properties: %{damage_base: 1, damage_type: :kinetic, card_hp: 3}, dice_slots: [%{id: "power_1", condition: nil, assigned_die: nil}], current_hp: 3}
+          ]
         },
         phase: :power_up
       }

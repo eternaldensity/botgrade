@@ -42,12 +42,11 @@ defmodule Botgrade.Game.ScavengeLogicTest do
       player: %Robot{
         id: "p",
         name: "Player",
-        deck: [%Card{id: "p_chs", name: "Player Frame", type: :chassis, properties: %{hp_max: 9}, dice_slots: []}],
+        deck: [%Card{id: "p_chs", name: "Player Frame", type: :chassis, properties: %{card_hp: 9}, dice_slots: []}],
         hand: [],
         discard: [],
         in_play: [],
-        total_hp: 9,
-        current_hp: 5
+        installed: [%Card{id: "p_chs_inst", name: "Player Frame", type: :chassis, properties: %{card_hp: 9}, dice_slots: [], current_hp: 5}]
       },
       enemy: %Robot{
         id: "e",
@@ -56,8 +55,7 @@ defmodule Botgrade.Game.ScavengeLogicTest do
         hand: [],
         discard: [],
         in_play: [],
-        total_hp: 9,
-        current_hp: 0
+        installed: [%Card{id: "e_chs_inst", name: "Enemy Frame", type: :chassis, properties: %{card_hp: 9}, dice_slots: [], current_hp: 0}]
       },
       result: :player_wins
     }
@@ -142,8 +140,8 @@ defmodule Botgrade.Game.ScavengeLogicTest do
       state = %{won_state() | phase: :scavenging, scavenge_loot: make_enemy_cards(), scavenge_selected: ["e_wpn"]}
       new_state = ScavengeLogic.confirm_scavenge(state)
       assert new_state.phase == :ended
-      # Player had 1 card in deck, now should have that + scavenged card
-      assert length(new_state.player.deck) == 2
+      # Player had 1 card in deck + 1 installed, now should have those + scavenged card
+      assert length(new_state.player.deck) == 3
     end
 
     test "gives scavenged cards unique IDs" do
@@ -160,8 +158,8 @@ defmodule Botgrade.Game.ScavengeLogicTest do
       state = %{won_state() | phase: :scavenging, scavenge_loot: make_enemy_cards(), scavenge_selected: []}
       new_state = ScavengeLogic.confirm_scavenge(state)
       assert new_state.phase == :ended
-      # Player deck should just have their original card
-      assert length(new_state.player.deck) == 1
+      # Player deck should have original deck card + installed card
+      assert length(new_state.player.deck) == 2
     end
 
     test "consolidates all player cards into deck" do
@@ -171,7 +169,8 @@ defmodule Botgrade.Game.ScavengeLogicTest do
       assert new_state.player.hand == []
       assert new_state.player.discard == []
       assert new_state.player.in_play == []
-      assert length(new_state.player.deck) == 1
+      # 1 hand card + 1 installed card consolidated into deck
+      assert length(new_state.player.deck) == 2
     end
   end
 end
