@@ -34,7 +34,7 @@ defmodule Botgrade.Game.Robot do
 
   @default_card_hp %{
     chassis: 4,
-    cpu: 2,
+    cpu: 3,
     weapon: 3,
     armor: 3,
     battery: 2,

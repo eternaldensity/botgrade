@@ -33,7 +33,7 @@ defmodule Botgrade.Game.StarterDecks do
       chassis("chs_1", "Core Frame", card_hp: 5),
       chassis("chs_2", "Armor Plate", card_hp: 4),
       chassis("chs_3", "Aux Frame", card_hp: 2),
-      cpu("cpu_1", "Basic CPU", card_hp: 2)
+      cpu("cpu_1", "Basic CPU", card_hp: 3)
     ]
   end
 
@@ -58,7 +58,7 @@ defmodule Botgrade.Game.StarterDecks do
       armor("e_arm_1", "Scrap Plating", shield_base: 0, armor_type: :plating, slots: 1, card_hp: 2),
       chassis("e_chs_1", "Rogue Frame", card_hp: 5),
       chassis("e_chs_2", "Rogue Frame", card_hp: 4),
-      cpu("e_cpu_1", "Rogue CPU", card_hp: 2),
+      cpu("e_cpu_1", "Rogue CPU", card_hp: 3),
       locomotion("e_loc_1", "Rogue Treads", speed_base: 1, card_hp: 2)
     ]
   end
@@ -105,7 +105,7 @@ defmodule Botgrade.Game.StarterDecks do
       chassis("e_chs_1", "Ironclad Core", card_hp: 5),
       chassis("e_chs_2", "Ironclad Frame", card_hp: 5),
       chassis("e_chs_3", "Reinforced Plate", card_hp: 4),
-      cpu("e_cpu_1", "Ironclad CPU", card_hp: 3),
+      cpu("e_cpu_1", "Ironclad CPU", card_hp: 4),
       locomotion("e_loc_1", "Heavy Treads", speed_base: 1, card_hp: 3)
     ]
   end
@@ -149,7 +149,7 @@ defmodule Botgrade.Game.StarterDecks do
       ),
       chassis("e_chs_1", "Strikebolt Frame", card_hp: 3),
       chassis("e_chs_2", "Light Frame", card_hp: 2),
-      cpu("e_cpu_1", "Strikebolt CPU", card_hp: 1),
+      cpu("e_cpu_1", "Strikebolt CPU", card_hp: 2),
       locomotion("e_loc_1", "Sprint Jets", speed_base: 3, card_hp: 1)
     ]
   end
@@ -195,7 +195,7 @@ defmodule Botgrade.Game.StarterDecks do
       chassis("e_chs_1", "Hexapod Core", card_hp: 4),
       chassis("e_chs_2", "Hexapod Segment", card_hp: 3),
       chassis("e_chs_3", "Leg Segment", card_hp: 2),
-      cpu("e_cpu_1", "Hexapod Brain", card_hp: 2),
+      cpu("e_cpu_1", "Hexapod Brain", card_hp: 3),
       locomotion("e_loc_1", "Six Legs", speed_base: 2, card_hp: 2)
     ]
   end
