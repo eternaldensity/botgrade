@@ -129,7 +129,11 @@ defmodule Botgrade.Game.CombatLogic do
 
       # Immediate activation: when all slots filled on a weapon/armor, fire it now
       if all_slots_filled?(updated_card) and updated_card.type in [:weapon, :armor] do
-        state = activate_card(state, updated_card, :player)
+        state =
+          state
+          |> activate_card(updated_card, :player)
+          |> check_victory()
+
         {:ok, state}
       else
         {:ok, state}
@@ -183,6 +187,9 @@ defmodule Botgrade.Game.CombatLogic do
     |> check_victory()
     |> maybe_transition_to_enemy()
   end
+
+  # Victory was already determined mid-turn (e.g. from card activation)
+  def end_turn(%CombatState{result: result} = state) when result != :ongoing, do: state
 
   defp maybe_transition_to_enemy(%CombatState{result: :ongoing} = state) do
     %{state | phase: :enemy_turn}
@@ -458,6 +465,9 @@ defmodule Botgrade.Game.CombatLogic do
     in_play_cards = clear_dice_from_cards(combatant.in_play)
 
     all_cards = hand_cards ++ in_play_cards
+
+    # Clear activation results so cards don't show stale info when redrawn
+    all_cards = Enum.map(all_cards, &%{&1 | last_result: nil})
 
     # Capacitors with stored dice stay in hand for next turn
     {charged_capacitors, to_discard} =
