@@ -57,16 +57,7 @@ defmodule Botgrade.Game.CombatLogic do
 
             {dice, penalty_msg} =
               if card.damage == :damaged do
-                original_count = length(dice)
-                reduced = Enum.take(dice, max(1, original_count - 1))
-                lost = original_count - length(reduced)
-
-                msg =
-                  if lost > 0,
-                    do: " (#{lost} die lost - damaged)",
-                    else: ""
-
-                {reduced, msg}
+                apply_battery_damage_penalty(dice, card.properties.die_sides)
               else
                 {dice, ""}
               end
@@ -149,6 +140,17 @@ defmodule Botgrade.Game.CombatLogic do
   def activate_cpu(_state, _card_id), do: {:error, "Not in power up phase."}
 
   defp activate_cpu_by_type(state, card) do
+    if card.damage == :damaged and :rand.uniform(3) == 1 do
+      combatant = mark_cpu_activated(state.player, card)
+      state = %{state | player: combatant}
+      state = add_log(state, "#{card.name} malfunctions! Ability failed (damaged).")
+      {:ok, state}
+    else
+      do_activate_cpu_by_type(state, card)
+    end
+  end
+
+  defp do_activate_cpu_by_type(state, card) do
     ability = card.properties.cpu_ability
 
     case ability.type do
@@ -1141,6 +1143,24 @@ defmodule Botgrade.Game.CombatLogic do
     %{state | cpu_targeting: nil, cpu_discard_selected: [], cpu_targeting_mode: nil, cpu_selected_installed: nil}
   end
 
+  defp apply_battery_damage_penalty(dice, die_sides) do
+    original_count = length(dice)
+
+    if original_count > 1 do
+      reduced = Enum.take(dice, original_count - 1)
+      lost = original_count - length(reduced)
+      {reduced, " (#{lost} die lost - damaged)"}
+    else
+      # Single-die battery: downgrade die value instead (cap at die_sides - 2, minimum 1)
+      downgraded =
+        Enum.map(dice, fn d ->
+          %{d | value: max(1, min(d.value, die_sides - 2))}
+        end)
+
+      {downgraded, " (die capped at #{die_sides - 2} - damaged)"}
+    end
+  end
+
   defp apply_damage_penalty(value, %Card{damage: :intact}), do: value
   defp apply_damage_penalty(value, %Card{damage: :damaged}), do: max(0, div(value, 2))
   defp apply_damage_penalty(_value, %Card{damage: :destroyed}), do: 0
@@ -1187,6 +1207,14 @@ defmodule Botgrade.Game.CombatLogic do
 
   defp activate_enemy_battery(state, battery) do
     dice = Dice.roll(battery.properties.dice_count, battery.properties.die_sides)
+
+    {dice, penalty_msg} =
+      if battery.damage == :damaged do
+        apply_battery_damage_penalty(dice, battery.properties.die_sides)
+      else
+        {dice, ""}
+      end
+
     dice_str = Enum.map_join(dice, ", ", fn d -> "#{d.value}" end)
 
     updated_battery = %{
@@ -1202,7 +1230,7 @@ defmodule Botgrade.Game.CombatLogic do
     enemy = %{enemy | hand: hand, available_dice: enemy.available_dice ++ dice}
 
     %{state | enemy: enemy}
-    |> add_log("Enemy activates #{battery.name}: rolled [#{dice_str}].")
+    |> add_log("Enemy activates #{battery.name}: rolled [#{dice_str}].#{penalty_msg}")
   end
 
   defp ai_allocate_dice(state) do
@@ -1289,7 +1317,13 @@ defmodule Botgrade.Game.CombatLogic do
       end
 
     Enum.reduce(cpus, state, fn cpu_card, acc_state ->
-      ai_execute_cpu_ability(acc_state, cpu_card, cpu_card.properties.cpu_ability)
+      if cpu_card.damage == :damaged and :rand.uniform(3) == 1 do
+        combatant = mark_cpu_activated(acc_state.enemy, cpu_card)
+        acc_state = %{acc_state | enemy: combatant}
+        add_log(acc_state, "Enemy #{cpu_card.name} malfunctions! Ability failed (damaged).")
+      else
+        ai_execute_cpu_ability(acc_state, cpu_card, cpu_card.properties.cpu_ability)
+      end
     end)
   end
 

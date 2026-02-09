@@ -15,9 +15,9 @@
 
 # fixes
 
-## some damaged items have no effect on damage
-* strikebolt cell shows 1d6 being replaced with 1d6
-* damaged CPU should fail its ability 1/3 of the time
+## ~~some damaged items have no effect on damage~~
+* ~~strikebolt cell shows 1d6 being replaced with 1d6~~ (1-die batteries now cap die value at die_sides-2 instead of losing a die)
+* ~~damaged CPU should fail its ability 1/3 of the time~~ (1/3 chance to malfunction, consumes activation)
 
 ## campaign is stuck after finishing the lab
 
