@@ -3,9 +3,7 @@ defmodule Botgrade.Game.CombatState do
 
   @type phase ::
           :draw
-          | :activate_batteries
-          | :allocate_dice
-          | :resolve
+          | :power_up
           | :enemy_turn
           | :scavenging
           | :ended

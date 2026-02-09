@@ -24,15 +24,15 @@ defmodule Botgrade.Game.CombatLogic do
   def draw_phase(%CombatState{phase: :draw, turn_owner: :player} = state) do
     player = draw_cards(state.player, @draw_count)
 
-    %{state | player: player, phase: :activate_batteries}
+    %{state | player: player, phase: :power_up}
     |> add_log("Turn #{state.turn_number}: Drew #{length(player.hand)} cards.")
   end
 
-  # --- Battery Activation ---
+  # --- Battery Activation (available during :power_up) ---
 
   @spec activate_battery(CombatState.t(), String.t()) ::
           {:ok, CombatState.t()} | {:error, String.t()}
-  def activate_battery(%CombatState{phase: :activate_batteries} = state, card_id) do
+  def activate_battery(%CombatState{phase: :power_up} = state, card_id) do
     case find_card_in_hand(state.player, card_id) do
       nil ->
         {:error, "Card not found in hand."}
@@ -48,13 +48,23 @@ defmodule Botgrade.Game.CombatLogic do
             {:error, "Battery already activated this turn."}
 
           true ->
-            dice =
-              Dice.roll(card.properties.dice_count, card.properties.die_sides)
+            dice = Dice.roll(card.properties.dice_count, card.properties.die_sides)
 
-            dice =
-              if card.damage == :damaged,
-                do: Enum.take(dice, max(1, length(dice) - 1)),
-                else: dice
+            {dice, penalty_msg} =
+              if card.damage == :damaged do
+                original_count = length(dice)
+                reduced = Enum.take(dice, max(1, original_count - 1))
+                lost = original_count - length(reduced)
+
+                msg =
+                  if lost > 0,
+                    do: " (#{lost} die lost - damaged)",
+                    else: ""
+
+                {reduced, msg}
+              else
+                {dice, ""}
+              end
 
             dice_str = Enum.map_join(dice, ", ", fn d -> "#{d.value}" end)
 
@@ -74,7 +84,7 @@ defmodule Botgrade.Game.CombatLogic do
 
             state =
               %{state | player: player}
-              |> add_log("Activated #{card.name}: rolled [#{dice_str}].")
+              |> add_log("Activated #{card.name}: rolled [#{dice_str}].#{penalty_msg}")
 
             {:ok, state}
         end
@@ -84,26 +94,22 @@ defmodule Botgrade.Game.CombatLogic do
     end
   end
 
-  def activate_battery(_state, _card_id), do: {:error, "Not in battery activation phase."}
+  def activate_battery(_state, _card_id), do: {:error, "Not in power up phase."}
 
-  @spec finish_activating(CombatState.t()) :: CombatState.t()
-  def finish_activating(%CombatState{phase: :activate_batteries} = state) do
-    %{state | phase: :allocate_dice}
-    |> add_log("Battery activation complete. Allocate your dice.")
-  end
-
-  # --- Dice Allocation ---
+  # --- Dice Allocation (available during :power_up, with immediate activation) ---
 
   @spec allocate_die(CombatState.t(), non_neg_integer(), String.t(), String.t()) ::
           {:ok, CombatState.t()} | {:error, String.t()}
-  def allocate_die(%CombatState{phase: :allocate_dice} = state, die_index, card_id, slot_id) do
+  def allocate_die(%CombatState{phase: :power_up} = state, die_index, card_id, slot_id) do
     player = state.player
 
     with {:die, die} when not is_nil(die) <- {:die, Enum.at(player.available_dice, die_index)},
          {:card, card} when not is_nil(card) <- {:card, find_card_in_hand_or_play(player, card_id)},
          {:slot, slot_idx, slot} when not is_nil(slot) <- find_slot(card, slot_id),
          true <- is_nil(slot.assigned_die) || {:error, "Slot already has a die."},
-         true <- Card.meets_condition?(slot.condition, die.value) || {:error, "Die doesn't meet slot condition."} do
+         true <-
+           Card.meets_condition?(slot.condition, die.value) ||
+             {:error, "Die doesn't meet slot condition."} do
       updated_slot = %{slot | assigned_die: die}
       updated_slots = List.replace_at(card.dice_slots, slot_idx, updated_slot)
       updated_card = %{card | dice_slots: updated_slots}
@@ -115,7 +121,15 @@ defmodule Botgrade.Game.CombatLogic do
           in_play: replace_card(player.in_play, card_id, updated_card)
       }
 
-      {:ok, %{state | player: player}}
+      state = %{state | player: player}
+
+      # Immediate activation: when all slots filled on a weapon/armor, fire it now
+      if all_slots_filled?(updated_card) and updated_card.type in [:weapon, :armor] do
+        state = activate_card(state, updated_card, :player)
+        {:ok, state}
+      else
+        {:ok, state}
+      end
     else
       {:die, nil} -> {:error, "Invalid die index."}
       {:card, nil} -> {:error, "Card not found."}
@@ -125,14 +139,15 @@ defmodule Botgrade.Game.CombatLogic do
   end
 
   def allocate_die(_state, _die_index, _card_id, _slot_id),
-    do: {:error, "Not in dice allocation phase."}
+    do: {:error, "Not in power up phase."}
 
   @spec unallocate_die(CombatState.t(), String.t(), String.t()) ::
           {:ok, CombatState.t()} | {:error, String.t()}
-  def unallocate_die(%CombatState{phase: :allocate_dice} = state, card_id, slot_id) do
+  def unallocate_die(%CombatState{phase: :power_up} = state, card_id, slot_id) do
     player = state.player
 
-    with {:card, card} when not is_nil(card) <- {:card, find_card_in_hand_or_play(player, card_id)},
+    with {:card, card} when not is_nil(card) <-
+           {:card, find_card_in_hand_or_play(player, card_id)},
          {:slot, slot_idx, slot} when not is_nil(slot) <- find_slot(card, slot_id),
          true <- not is_nil(slot.assigned_die) || {:error, "Slot is empty."} do
       die = slot.assigned_die
@@ -155,18 +170,11 @@ defmodule Botgrade.Game.CombatLogic do
     end
   end
 
-  @spec finish_allocating(CombatState.t()) :: CombatState.t()
-  def finish_allocating(%CombatState{phase: :allocate_dice} = state) do
-    %{state | phase: :resolve}
-  end
+  # --- End Turn (replaces finish_activating + finish_allocating + resolve) ---
 
-  # --- Resolve Phase ---
-
-  @spec resolve(CombatState.t()) :: CombatState.t()
-  def resolve(%CombatState{phase: :resolve} = state) do
+  @spec end_turn(CombatState.t()) :: CombatState.t()
+  def end_turn(%CombatState{phase: :power_up} = state) do
     state
-    |> resolve_armor(:player)
-    |> resolve_weapons(:player)
     |> cleanup_turn(:player)
     |> check_victory()
     |> maybe_transition_to_enemy()
@@ -194,6 +202,130 @@ defmodule Botgrade.Game.CombatLogic do
     |> cleanup_turn(:enemy)
     |> check_victory()
     |> next_turn()
+  end
+
+  # --- Immediate Card Activation (for player during :power_up) ---
+
+  defp activate_card(state, card, who) do
+    case card.type do
+      :weapon -> activate_weapon(state, card, who)
+      :armor -> activate_armor(state, card, who)
+      _ -> state
+    end
+  end
+
+  defp activate_weapon(state, weapon, who) do
+    {attacker, defender} = get_combatants(state, who)
+    who_name = if who == :player, do: "You", else: "Enemy"
+
+    raw_damage =
+      weapon.dice_slots
+      |> Enum.filter(&(&1.assigned_die != nil))
+      |> Enum.reduce(weapon.properties.damage_base, fn slot, acc ->
+        acc + slot.assigned_die.value
+      end)
+
+    total_damage = apply_damage_penalty(raw_damage, weapon)
+
+    penalty_msg =
+      if weapon.damage == :damaged and raw_damage != total_damage,
+        do: " (halved from #{raw_damage} - damaged)",
+        else: ""
+
+    # Damage absorption: plating -> shield -> HP
+    {defender, absorb_msg} = apply_damage(defender, total_damage)
+
+    log_msg =
+      "#{who_name} fires #{weapon.name} for #{total_damage} damage#{penalty_msg}.#{absorb_msg}"
+
+    # Move card to in_play with cleared slots
+    cleared_card = clear_card_slots(weapon)
+    attacker = move_card_to_in_play(attacker, weapon.id, cleared_card)
+
+    state = put_combatants(state, who, attacker, defender)
+    add_log(state, log_msg)
+  end
+
+  defp activate_armor(state, armor, who) do
+    {combatant, _defender} = get_combatants(state, who)
+    who_name = if who == :player, do: "You", else: "Enemy"
+
+    raw_value =
+      armor.dice_slots
+      |> Enum.filter(&(&1.assigned_die != nil))
+      |> Enum.reduce(armor.properties.shield_base, fn slot, acc ->
+        acc + slot.assigned_die.value
+      end)
+
+    value = apply_damage_penalty(raw_value, armor)
+
+    penalty_msg =
+      if armor.damage == :damaged and raw_value != value,
+        do: " (halved from #{raw_value} - damaged)",
+        else: ""
+
+    {combatant, log_msg} =
+      case armor.properties.armor_type do
+        :plating ->
+          combatant = %{combatant | plating: combatant.plating + value}
+          {combatant, "#{who_name} activates #{armor.name}: +#{value} plating#{penalty_msg}."}
+
+        :shield ->
+          combatant = %{combatant | shield: combatant.shield + value}
+          {combatant, "#{who_name} activates #{armor.name}: +#{value} shield#{penalty_msg}."}
+      end
+
+    # Move card to in_play with cleared slots
+    cleared_card = clear_card_slots(armor)
+    combatant = move_card_to_in_play(combatant, armor.id, cleared_card)
+
+    state =
+      if who == :player,
+        do: %{state | player: combatant},
+        else: %{state | enemy: combatant}
+
+    add_log(state, log_msg)
+  end
+
+  # --- Damage Application (plating -> shield -> HP) ---
+
+  defp apply_damage(defender, total_damage) do
+    # 1. Plating absorbs first
+    plating_absorbed = min(total_damage, defender.plating)
+    remaining_after_plating = total_damage - plating_absorbed
+    new_plating = defender.plating - plating_absorbed
+
+    # 2. Shield absorbs next
+    shield_absorbed = min(remaining_after_plating, defender.shield)
+    remaining_after_shield = remaining_after_plating - shield_absorbed
+    new_shield = defender.shield - shield_absorbed
+
+    # 3. HP takes the rest
+    new_hp = max(0, defender.current_hp - remaining_after_shield)
+
+    defender = %{defender | plating: new_plating, shield: new_shield, current_hp: new_hp}
+
+    absorb_parts =
+      []
+      |> then(fn parts ->
+        if plating_absorbed > 0,
+          do: parts ++ ["#{plating_absorbed} absorbed by plating"],
+          else: parts
+      end)
+      |> then(fn parts ->
+        if shield_absorbed > 0,
+          do: parts ++ ["#{shield_absorbed} absorbed by shields"],
+          else: parts
+      end)
+
+    absorb_msg =
+      if absorb_parts != [] do
+        " (#{Enum.join(absorb_parts, ", ")})"
+      else
+        ""
+      end
+
+    {defender, absorb_msg}
   end
 
   # --- Private Helpers ---
@@ -233,6 +365,23 @@ defmodule Botgrade.Game.CombatLogic do
     end)
   end
 
+  defp all_slots_filled?(card) do
+    card.dice_slots != [] and Enum.all?(card.dice_slots, &(&1.assigned_die != nil))
+  end
+
+  defp clear_card_slots(card) do
+    updated_slots = Enum.map(card.dice_slots, &%{&1 | assigned_die: nil})
+    %{card | dice_slots: updated_slots}
+  end
+
+  defp move_card_to_in_play(robot, card_id, cleared_card) do
+    hand = Enum.reject(robot.hand, &(&1.id == card_id))
+    in_play_without = Enum.reject(robot.in_play, &(&1.id == card_id))
+    %{robot | hand: hand, in_play: in_play_without ++ [cleared_card]}
+  end
+
+  # --- Resolution helpers (used by enemy turn batch resolution) ---
+
   defp resolve_weapons(state, who) do
     {attacker, defender} = get_combatants(state, who)
     who_name = if who == :player, do: "You", else: "Enemy"
@@ -244,29 +393,28 @@ defmodule Botgrade.Game.CombatLogic do
         Enum.any?(card.dice_slots, fn slot -> slot.assigned_die != nil end)
       end)
 
-    {defender, log_entries} =
-      Enum.reduce(weapons, {defender, []}, fn weapon, {def_acc, logs} ->
-        total_damage =
+    {attacker, defender, log_entries} =
+      Enum.reduce(weapons, {attacker, defender, []}, fn weapon, {att_acc, def_acc, logs} ->
+        raw_damage =
           weapon.dice_slots
           |> Enum.filter(&(&1.assigned_die != nil))
           |> Enum.reduce(weapon.properties.damage_base, fn slot, acc ->
             acc + slot.assigned_die.value
           end)
-          |> apply_damage_penalty(weapon)
 
-        absorbed = min(total_damage, def_acc.shield)
-        net_damage = total_damage - absorbed
-        new_shield = def_acc.shield - absorbed
-        new_hp = max(0, def_acc.current_hp - net_damage)
+        total_damage = apply_damage_penalty(raw_damage, weapon)
+
+        penalty_msg =
+          if weapon.damage == :damaged and raw_damage != total_damage,
+            do: " (halved from #{raw_damage} - damaged)",
+            else: ""
+
+        {def_acc, absorb_msg} = apply_damage(def_acc, total_damage)
 
         log_msg =
-          if absorbed > 0 do
-            "#{who_name} fires #{weapon.name} for #{total_damage} damage (#{absorbed} absorbed by shields). #{net_damage} damage dealt."
-          else
-            "#{who_name} fires #{weapon.name} for #{total_damage} damage."
-          end
+          "#{who_name} fires #{weapon.name} for #{total_damage} damage#{penalty_msg}.#{absorb_msg}"
 
-        {%{def_acc | current_hp: new_hp, shield: new_shield}, logs ++ [log_msg]}
+        {att_acc, def_acc, logs ++ [log_msg]}
       end)
 
     state = put_combatants(state, who, attacker, defender)
@@ -284,20 +432,35 @@ defmodule Botgrade.Game.CombatLogic do
         Enum.any?(card.dice_slots, fn slot -> slot.assigned_die != nil end)
       end)
 
-    {total_shield, log_entries} =
-      Enum.reduce(armor_cards, {0, []}, fn armor, {shield_acc, logs} ->
-        shield_value =
+    {combatant, log_entries} =
+      Enum.reduce(armor_cards, {combatant, []}, fn armor, {comb_acc, logs} ->
+        raw_value =
           armor.dice_slots
           |> Enum.filter(&(&1.assigned_die != nil))
           |> Enum.reduce(armor.properties.shield_base, fn slot, acc ->
             acc + slot.assigned_die.value
           end)
-          |> apply_damage_penalty(armor)
 
-        {shield_acc + shield_value, logs ++ ["#{who_name} activates #{armor.name}: #{shield_value} shield."]}
+        value = apply_damage_penalty(raw_value, armor)
+
+        penalty_msg =
+          if armor.damage == :damaged and raw_value != value,
+            do: " (halved from #{raw_value} - damaged)",
+            else: ""
+
+        {comb_acc, log_msg} =
+          case armor.properties.armor_type do
+            :plating ->
+              comb_acc = %{comb_acc | plating: comb_acc.plating + value}
+              {comb_acc, "#{who_name} activates #{armor.name}: +#{value} plating#{penalty_msg}."}
+
+            :shield ->
+              comb_acc = %{comb_acc | shield: comb_acc.shield + value}
+              {comb_acc, "#{who_name} activates #{armor.name}: +#{value} shield#{penalty_msg}."}
+          end
+
+        {comb_acc, logs ++ [log_msg]}
       end)
-
-    combatant = %{combatant | shield: total_shield}
 
     state =
       if who == :player,
@@ -328,6 +491,7 @@ defmodule Botgrade.Game.CombatLogic do
         discard: combatant.discard ++ to_discard,
         in_play: [],
         available_dice: [],
+        # Shield resets each turn, plating persists
         shield: 0
     }
 
@@ -393,7 +557,10 @@ defmodule Botgrade.Game.CombatLogic do
 
       updated_battery = %{
         battery
-        | properties: %{battery.properties | remaining_activations: battery.properties.remaining_activations - 1}
+        | properties: %{
+            battery.properties
+            | remaining_activations: battery.properties.remaining_activations - 1
+          }
       }
 
       enemy = acc_state.enemy

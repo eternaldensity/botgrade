@@ -9,10 +9,10 @@ defmodule Botgrade.Combat.CombatServerTest do
     %{combat_id: combat_id}
   end
 
-  test "get_state returns initial combat state", %{combat_id: id} do
+  test "get_state returns initial combat state in power_up phase", %{combat_id: id} do
     state = CombatServer.get_state(id)
     assert state.id == id
-    assert state.phase == :activate_batteries
+    assert state.phase == :power_up
     assert length(state.player.hand) == 5
     assert state.result == :ongoing
   end
@@ -37,13 +37,13 @@ defmodule Botgrade.Combat.CombatServerTest do
       CombatServer.activate_battery(id, bat.id)
     end
 
-    # Finish activating and resolve (which also runs enemy turn)
-    {:ok, new_state} = CombatServer.finish_allocating(id)
+    # End turn (which also runs enemy turn and draws next hand)
+    {:ok, new_state} = CombatServer.end_turn(id)
 
-    # Should be back to activate_batteries for next turn (or ended)
-    assert new_state.phase in [:activate_batteries, :scavenging, :ended]
+    # Should be back to power_up for next turn (or ended)
+    assert new_state.phase in [:power_up, :scavenging, :ended]
 
-    if new_state.phase == :activate_batteries do
+    if new_state.phase == :power_up do
       assert new_state.turn_number == 2
     end
   end

@@ -42,10 +42,16 @@ defmodule BotgradeWeb.CombatComponents do
       <div class="flex-1">
         <div class="flex justify-between text-xs mb-1">
           <span class="font-mono">{@robot.current_hp}/{@robot.total_hp} HP</span>
-          <span :if={@robot.shield > 0} class="flex items-center gap-1 text-info font-semibold">
-            <.icon name="hero-shield-check-mini" class="size-3.5" />
-            {@robot.shield}
-          </span>
+          <div class="flex items-center gap-2">
+            <span :if={@robot.plating > 0} class="flex items-center gap-1 text-primary font-semibold">
+              <.icon name="hero-shield-check-mini" class="size-3.5" />
+              {@robot.plating} plating
+            </span>
+            <span :if={@robot.shield > 0} class="flex items-center gap-1 text-info font-semibold">
+              <.icon name="hero-sparkles-mini" class="size-3.5" />
+              {@robot.shield} shield
+            </span>
+          </div>
         </div>
         <div class="w-full bg-base-300 rounded-full h-3 overflow-hidden">
           <div
@@ -81,18 +87,11 @@ defmodule BotgradeWeb.CombatComponents do
           {phase_hint(@phase)}
         </span>
         <button
-          :if={@phase == :activate_batteries}
-          phx-click="finish_batteries"
-          class="btn btn-sm btn-secondary"
-        >
-          Done Activating
-        </button>
-        <button
-          :if={@phase == :allocate_dice}
-          phx-click="finish_allocating"
+          :if={@phase == :power_up}
+          phx-click="end_turn"
           class="btn btn-sm btn-accent"
         >
-          Resolve Turn
+          End Turn
         </button>
       </div>
     </div>
@@ -107,10 +106,10 @@ defmodule BotgradeWeb.CombatComponents do
 
   def dice_pool(assigns) do
     ~H"""
-    <div :if={length(@available_dice) > 0 or @phase == :allocate_dice} class={[
+    <div :if={length(@available_dice) > 0 or @phase == :power_up} class={[
       "card shadow-sm transition-all",
-      @phase == :allocate_dice && "bg-base-100 border-2 border-primary/30",
-      @phase != :allocate_dice && "bg-base-100"
+      @phase == :power_up && "bg-base-100 border-2 border-primary/30",
+      @phase != :power_up && "bg-base-100"
     ]}>
       <div class="card-body p-3">
         <div class="flex items-center justify-between">
@@ -131,9 +130,9 @@ defmodule BotgradeWeb.CombatComponents do
               "w-12 h-14 rounded-lg border-2 flex flex-col items-center justify-center font-mono transition-all",
               @selected_die == idx && "bg-primary text-primary-content border-primary shadow-lg shadow-primary/30 -translate-y-1 scale-105",
               @selected_die != idx && "bg-base-100 border-base-300 shadow-sm hover:shadow-md hover:-translate-y-0.5",
-              @phase != :allocate_dice && "opacity-50 cursor-not-allowed"
+              @phase != :power_up && "opacity-50 cursor-not-allowed"
             ]}
-            disabled={@phase != :allocate_dice}
+            disabled={@phase != :power_up}
           >
             <span class="text-xl font-bold leading-none">{die.value}</span>
             <span class="text-[10px] opacity-60 leading-none">d{die.sides}</span>
@@ -165,7 +164,7 @@ defmodule BotgradeWeb.CombatComponents do
       card_bg(@card.type),
       card_border(@card.type),
       @interactable && "ring-2 ring-primary/40 shadow-lg cursor-pointer",
-      not @interactable and @phase in [:activate_batteries, :allocate_dice] && "opacity-60"
+      not @interactable and @phase == :power_up && "opacity-60"
     ]}>
       <%!-- Header: icon + name + type badge --%>
       <div class="flex items-start justify-between gap-1">
@@ -200,7 +199,7 @@ defmodule BotgradeWeb.CombatComponents do
 
       <%!-- Battery Activation Button --%>
       <button
-        :if={@card.type == :battery and @phase == :activate_batteries and @card.properties.remaining_activations > 0 and not Map.get(@card.properties, :activated_this_turn, false)}
+        :if={@card.type == :battery and @phase == :power_up and @card.properties.remaining_activations > 0 and not Map.get(@card.properties, :activated_this_turn, false)}
         phx-click="activate_battery"
         phx-value-card-id={@card.id}
         class="btn btn-sm btn-primary w-full"
@@ -239,25 +238,25 @@ defmodule BotgradeWeb.CombatComponents do
     ~H"""
     <div :if={@slot.assigned_die != nil} class="relative group">
       <div
-        phx-click={if @phase == :allocate_dice, do: "unassign_die"}
-        phx-value-card-id={if @phase == :allocate_dice, do: @card.id}
-        phx-value-slot-id={if @phase == :allocate_dice, do: @slot.id}
+        phx-click={if @phase == :power_up, do: "unassign_die"}
+        phx-value-card-id={if @phase == :power_up, do: @card.id}
+        phx-value-slot-id={if @phase == :power_up, do: @slot.id}
         class={[
           "w-10 h-10 rounded-lg border-2 border-success bg-success/15 flex flex-col items-center justify-center font-mono",
-          @phase == :allocate_dice && "cursor-pointer hover:border-error hover:bg-error/10"
+          @phase == :power_up && "cursor-pointer hover:border-error hover:bg-error/10"
         ]}
       >
         <span class="text-lg font-bold leading-none">{@slot.assigned_die.value}</span>
         <span class="text-[8px] opacity-50 leading-none">d{@slot.assigned_die.sides}</span>
       </div>
-      <span :if={@phase == :allocate_dice} class="absolute -top-1 -right-1 bg-error text-error-content rounded-full w-4 h-4 text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+      <span :if={@phase == :power_up} class="absolute -top-1 -right-1 bg-error text-error-content rounded-full w-4 h-4 text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
         x
       </span>
     </div>
 
     <div :if={@slot.assigned_die == nil}>
       <button
-        :if={@phase == :allocate_dice and @selected_die != nil}
+        :if={@phase == :power_up and @selected_die != nil}
         phx-click="assign_die"
         phx-value-card-id={@card.id}
         phx-value-slot-id={@slot.id}
@@ -275,7 +274,7 @@ defmodule BotgradeWeb.CombatComponents do
       </button>
 
       <div
-        :if={not (@phase == :allocate_dice and @selected_die != nil)}
+        :if={not (@phase == :power_up and @selected_die != nil)}
         class="w-10 h-10 rounded-lg border-2 border-dashed border-base-300 flex flex-col items-center justify-center text-[10px] text-base-content/40"
       >
         <span :if={@slot.condition}>{condition_label(@slot.condition)}</span>
@@ -294,7 +293,12 @@ defmodule BotgradeWeb.CombatComponents do
     <%= case @card.type do %>
       <% :battery -> %>
         <div class="flex items-center gap-2">
-          <span class="font-mono">{@card.properties.dice_count}d{@card.properties.die_sides}</span>
+          <%= if @card.damage == :damaged do %>
+            <span class="line-through text-base-content/40 font-mono">{@card.properties.dice_count}d{@card.properties.die_sides}</span>
+            <span class="text-warning font-mono">{max(@card.properties.dice_count - 1, 1)}d{@card.properties.die_sides}</span>
+          <% else %>
+            <span class="font-mono">{@card.properties.dice_count}d{@card.properties.die_sides}</span>
+          <% end %>
           <span class="text-base-content/50">|</span>
           <.charge_dots
             remaining={@card.properties.remaining_activations}
@@ -306,19 +310,34 @@ defmodule BotgradeWeb.CombatComponents do
       <% :weapon -> %>
         <div class="flex items-center gap-1">
           <span class="font-semibold">{String.capitalize(to_string(@card.properties.damage_type))}</span>
-          <span :if={@card.properties.damage_base > 0} class="text-error font-mono">+{@card.properties.damage_base}</span>
+          <%= if @card.damage == :damaged and @card.properties.damage_base > 0 do %>
+            <span class="line-through text-base-content/40 font-mono">+{@card.properties.damage_base}</span>
+            <span class="text-warning font-mono">+{div(@card.properties.damage_base, 2)}</span>
+          <% else %>
+            <span :if={@card.properties.damage_base > 0} class="text-error font-mono">+{@card.properties.damage_base}</span>
+          <% end %>
         </div>
       <% :armor -> %>
         <div class="flex items-center gap-1">
           <span class="font-semibold">{String.capitalize(to_string(@card.properties.armor_type))}</span>
-          <span :if={@card.properties.shield_base > 0} class="text-info font-mono">+{@card.properties.shield_base}</span>
+          <%= if @card.damage == :damaged and @card.properties.shield_base > 0 do %>
+            <span class="line-through text-base-content/40 font-mono">+{@card.properties.shield_base}</span>
+            <span class="text-warning font-mono">+{div(@card.properties.shield_base, 2)}</span>
+          <% else %>
+            <span :if={@card.properties.shield_base > 0} class="text-info font-mono">+{@card.properties.shield_base}</span>
+          <% end %>
         </div>
       <% :locomotion -> %>
         <span>Speed <span class="font-mono text-success">+{@card.properties.speed_base}</span></span>
       <% :chassis -> %>
         <div class="flex items-center gap-1">
           <.icon name="hero-heart-mini" class="size-3.5 text-error" />
-          <span class="font-mono">{@card.properties.hp_max} HP</span>
+          <%= if @card.damage == :damaged do %>
+            <span class="line-through text-base-content/40 font-mono">{@card.properties.hp_max} HP</span>
+            <span class="text-warning font-mono">{div(@card.properties.hp_max, 2)} HP</span>
+          <% else %>
+            <span class="font-mono">{@card.properties.hp_max} HP</span>
+          <% end %>
         </div>
     <% end %>
     """
@@ -507,15 +526,12 @@ defmodule BotgradeWeb.CombatComponents do
   # --- Helper Functions ---
 
   defp phase_label(:draw), do: "Draw"
-  defp phase_label(:activate_batteries), do: "Activate Batteries"
-  defp phase_label(:allocate_dice), do: "Allocate Dice"
-  defp phase_label(:resolve), do: "Resolving..."
+  defp phase_label(:power_up), do: "Power Up"
   defp phase_label(:enemy_turn), do: "Enemy Turn"
   defp phase_label(:scavenging), do: "Scavenging"
   defp phase_label(:ended), do: "Combat Over"
 
-  defp phase_hint(:activate_batteries), do: "Tap batteries to generate dice"
-  defp phase_hint(:allocate_dice), do: "Select a die, then tap a slot"
+  defp phase_hint(:power_up), do: "Activate batteries, then assign dice to cards"
   defp phase_hint(_), do: ""
 
   defp card_type_icon(:battery), do: "hero-bolt"
@@ -571,14 +587,19 @@ defmodule BotgradeWeb.CombatComponents do
   defp hp_bar_color(current, total) when current > total * 0.25, do: "bg-warning"
   defp hp_bar_color(_current, _total), do: "bg-error"
 
-  defp card_interactable?(card, :activate_batteries) do
-    card.type == :battery and
-      card.properties.remaining_activations > 0 and
-      not Map.get(card.properties, :activated_this_turn, false)
-  end
+  defp card_interactable?(card, :power_up) do
+    cond do
+      card.type == :battery and
+        card.properties.remaining_activations > 0 and
+          not Map.get(card.properties, :activated_this_turn, false) ->
+        true
 
-  defp card_interactable?(card, :allocate_dice) do
-    card.dice_slots != [] and Enum.any?(card.dice_slots, &(&1.assigned_die == nil))
+      card.dice_slots != [] and Enum.any?(card.dice_slots, &(&1.assigned_die == nil)) ->
+        true
+
+      true ->
+        false
+    end
   end
 
   defp card_interactable?(_card, _phase), do: false

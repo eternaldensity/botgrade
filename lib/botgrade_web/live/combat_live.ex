@@ -42,14 +42,6 @@ defmodule BotgradeWeb.CombatLive do
   end
 
   @impl true
-  def handle_event("finish_batteries", _params, socket) do
-    case CombatServer.finish_activating(socket.assigns.combat_id) do
-      {:ok, _state} -> {:noreply, assign(socket, error_message: nil)}
-      {:error, reason} -> {:noreply, assign(socket, error_message: reason)}
-    end
-  end
-
-  @impl true
   def handle_event("select_die", %{"die-index" => idx}, socket) do
     index = String.to_integer(idx)
 
@@ -90,8 +82,8 @@ defmodule BotgradeWeb.CombatLive do
   end
 
   @impl true
-  def handle_event("finish_allocating", _params, socket) do
-    case CombatServer.finish_allocating(socket.assigns.combat_id) do
+  def handle_event("end_turn", _params, socket) do
+    case CombatServer.end_turn(socket.assigns.combat_id) do
       {:ok, _state} -> {:noreply, assign(socket, selected_die: nil, error_message: nil)}
       {:error, reason} -> {:noreply, assign(socket, error_message: reason)}
     end

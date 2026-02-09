@@ -11,7 +11,8 @@ defmodule Botgrade.Game.Robot do
           available_dice: [map()],
           total_hp: non_neg_integer(),
           current_hp: non_neg_integer(),
-          shield: non_neg_integer()
+          shield: non_neg_integer(),
+          plating: non_neg_integer()
         }
 
   @enforce_keys [:id, :name]
@@ -25,7 +26,8 @@ defmodule Botgrade.Game.Robot do
     available_dice: [],
     total_hp: 0,
     current_hp: 0,
-    shield: 0
+    shield: 0,
+    plating: 0
   ]
 
   @spec new(String.t(), String.t(), [Card.t()]) :: t()

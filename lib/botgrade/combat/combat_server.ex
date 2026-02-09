@@ -15,17 +15,14 @@ defmodule Botgrade.Combat.CombatServer do
   def activate_battery(combat_id, card_id),
     do: GenServer.call(via(combat_id), {:activate_battery, card_id})
 
-  def finish_activating(combat_id),
-    do: GenServer.call(via(combat_id), :finish_activating)
-
   def allocate_die(combat_id, die_index, card_id, slot_id),
     do: GenServer.call(via(combat_id), {:allocate_die, die_index, card_id, slot_id})
 
   def unallocate_die(combat_id, card_id, slot_id),
     do: GenServer.call(via(combat_id), {:unallocate_die, card_id, slot_id})
 
-  def finish_allocating(combat_id),
-    do: GenServer.call(via(combat_id), :finish_allocating)
+  def end_turn(combat_id),
+    do: GenServer.call(via(combat_id), :end_turn)
 
   def toggle_scavenge_card(combat_id, card_id),
     do: GenServer.call(via(combat_id), {:toggle_scavenge_card, card_id})
@@ -90,19 +87,10 @@ defmodule Botgrade.Combat.CombatServer do
   end
 
   @impl true
-  def handle_call(:finish_activating, _from, state) do
-    new_state = CombatLogic.finish_activating(state)
-    broadcast(new_state)
-    {:reply, {:ok, new_state}, new_state}
-  end
-
-  @impl true
-  def handle_call(:finish_allocating, _from, state) do
+  def handle_call(:end_turn, _from, state) do
     new_state =
       state
-      |> maybe_finish_activating()
-      |> CombatLogic.finish_allocating()
-      |> CombatLogic.resolve()
+      |> CombatLogic.end_turn()
       |> maybe_enemy_turn()
       |> maybe_draw_phase()
 
@@ -130,12 +118,6 @@ defmodule Botgrade.Combat.CombatServer do
   end
 
   # --- Private ---
-
-  defp maybe_finish_activating(%{phase: :activate_batteries} = state) do
-    CombatLogic.finish_activating(state)
-  end
-
-  defp maybe_finish_activating(state), do: state
 
   defp maybe_enemy_turn(%{result: :ongoing, phase: :enemy_turn} = state) do
     CombatLogic.enemy_turn(state)
