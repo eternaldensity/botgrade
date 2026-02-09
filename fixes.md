@@ -1,13 +1,13 @@
 # balance fixes
 
 * strikebolt cpu ability to require strikebolt cell in hand
-* ~~prevent reuse of items via activations per turn (usually 1)~~ (batteries already have activated_this_turn; weapons/armor move to in_play)
+* ~~prevent reuse of items via activations per turn (usually 1)~~ (all card types use activated_this_turn flag, in_play zone removed)
 * ~~prevent discard of cards that have been used this turn~~ (blocked in toggle_cpu_discard + AI logic)
 * number of active CPUs limited by number of batteries. (if you have 3 batteries and 5 CPUs the newest 2 can't be activated)
 
 # UI improvements
 * animate the enemy's turn, showing damage as it's dealt to your components like it does for their damge to yours
-* i don't think there's any need for a separate in-play area
+* ~~i don't think there's any need for a separate in-play area~~
 * some cards don't fully display what they do
 * it's hard to tell what salvaged cards will do
 * display the shield and plating levels of opponent like for the player

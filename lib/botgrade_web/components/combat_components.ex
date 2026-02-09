@@ -285,6 +285,14 @@ defmodule BotgradeWeb.CombatComponents do
         </span>
       </div>
 
+      <%!-- Used this turn indicator for weapons/armor --%>
+      <span
+        :if={@card.type in [:weapon, :armor] and not @destroyed and Map.get(@card.properties, :activated_this_turn, false)}
+        class="text-[10px] text-base-content/50"
+      >
+        Used this turn
+      </span>
+
       <%!-- Damage indicator strip --%>
       <div :if={@card.damage == :damaged} class="text-xs text-warning flex items-center gap-1 -mb-1">
         <.icon name="hero-exclamation-triangle-mini" class="size-3.5" />
@@ -329,7 +337,7 @@ defmodule BotgradeWeb.CombatComponents do
   attr(:last_attack_result, :map, default: nil)
 
   def enemy_board(assigns) do
-    cards = assigns.robot.installed ++ assigns.robot.in_play ++ assigns.robot.hand
+    cards = assigns.robot.installed ++ assigns.robot.hand
     assigns = assign(assigns, :cards, cards)
 
     ~H"""
@@ -997,6 +1005,9 @@ defmodule BotgradeWeb.CombatComponents do
         card.properties.remaining_activations > 0 and
           not Map.get(card.properties, :activated_this_turn, false) ->
         true
+
+      card.type in [:weapon, :armor] and Map.get(card.properties, :activated_this_turn, false) ->
+        false
 
       card.dice_slots != [] and Enum.any?(card.dice_slots, &(&1.assigned_die == nil)) ->
         true

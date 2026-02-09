@@ -329,8 +329,11 @@ defmodule Botgrade.Game.CombatLogic do
     player = state.player
 
     with {:die, die} when not is_nil(die) <- {:die, Enum.at(player.available_dice, die_index)},
-         {:card, card} when not is_nil(card) <- {:card, find_card_in_hand_or_play(player, card_id)},
+         {:card, card} when not is_nil(card) <- {:card, find_card_in_hand(player, card_id)},
          true <- card.damage != :destroyed || {:error, "Card is destroyed."},
+         true <-
+           not (card.type in [:weapon, :armor] and Map.get(card.properties, :activated_this_turn, false)) ||
+             {:error, "Card already activated this turn."},
          {:slot, slot_idx, slot} when not is_nil(slot) <- find_slot(card, slot_id),
          true <- is_nil(slot.assigned_die) || {:error, "Slot already has a die."},
          true <-
@@ -343,8 +346,7 @@ defmodule Botgrade.Game.CombatLogic do
       player = %{
         player
         | available_dice: List.delete_at(player.available_dice, die_index),
-          hand: replace_card(player.hand, card_id, updated_card),
-          in_play: replace_card(player.in_play, card_id, updated_card)
+          hand: replace_card(player.hand, card_id, updated_card)
       }
 
       state = %{state | player: player}
@@ -377,7 +379,7 @@ defmodule Botgrade.Game.CombatLogic do
     player = state.player
 
     with {:card, card} when not is_nil(card) <-
-           {:card, find_card_in_hand_or_play(player, card_id)},
+           {:card, find_card_in_hand(player, card_id)},
          {:slot, slot_idx, slot} when not is_nil(slot) <- find_slot(card, slot_id),
          true <- not is_nil(slot.assigned_die) || {:error, "Slot is empty."} do
       die = slot.assigned_die
@@ -388,8 +390,7 @@ defmodule Botgrade.Game.CombatLogic do
       player = %{
         player
         | available_dice: player.available_dice ++ [die],
-          hand: replace_card(player.hand, card_id, updated_card),
-          in_play: replace_card(player.in_play, card_id, updated_card)
+          hand: replace_card(player.hand, card_id, updated_card)
       }
 
       {:ok, %{state | player: player}}
@@ -527,7 +528,7 @@ defmodule Botgrade.Game.CombatLogic do
           {state, attacker, log_msg}
       end
 
-    # Store result on card, then clear slots and move to in_play
+    # Store result on card, clear slots, mark activated
     dice_used = Enum.map(weapon.dice_slots, & &1.assigned_die) |> Enum.reject(&is_nil/1)
 
     result_card =
@@ -535,7 +536,7 @@ defmodule Botgrade.Game.CombatLogic do
       |> clear_card_slots()
       |> Map.put(:last_result, %{type: :damage, value: total_damage, dice: dice_used})
 
-    attacker = move_card_to_in_play(attacker, weapon.id, result_card)
+    attacker = mark_card_activated_in_hand(attacker, weapon.id, result_card)
 
     state =
       if who == :player,
@@ -583,7 +584,7 @@ defmodule Botgrade.Game.CombatLogic do
       |> clear_card_slots()
       |> Map.put(:last_result, %{type: armor_type, value: value, dice: dice_used})
 
-    combatant = move_card_to_in_play(combatant, weapon.id, result_card)
+    combatant = mark_card_activated_in_hand(combatant, weapon.id, result_card)
 
     state =
       if who == :player,
@@ -624,7 +625,7 @@ defmodule Botgrade.Game.CombatLogic do
           {combatant, "#{who_name} activates #{armor.name}: +#{value} shield#{penalty_msg}."}
       end
 
-    # Store result on card, then clear slots and move to in_play
+    # Store result on card, clear slots, mark activated
     dice_used = Enum.map(armor.dice_slots, & &1.assigned_die) |> Enum.reject(&is_nil/1)
     result_type = armor.properties.armor_type
 
@@ -633,7 +634,7 @@ defmodule Botgrade.Game.CombatLogic do
       |> clear_card_slots()
       |> Map.put(:last_result, %{type: result_type, value: value, dice: dice_used})
 
-    combatant = move_card_to_in_play(combatant, armor.id, result_card)
+    combatant = mark_card_activated_in_hand(combatant, armor.id, result_card)
 
     state =
       if who == :player,
@@ -650,7 +651,7 @@ defmodule Botgrade.Game.CombatLogic do
     who_name = if who == :player, do: "You", else: "Enemy"
 
     weapons =
-      (attacker.hand ++ attacker.in_play)
+      attacker.hand
       |> Enum.filter(&(&1.type == :weapon))
       |> Enum.filter(fn card ->
         card.damage != :destroyed and
@@ -751,7 +752,7 @@ defmodule Botgrade.Game.CombatLogic do
     who_name = if who == :player, do: "You", else: "Enemy"
 
     armor_cards =
-      (combatant.hand ++ combatant.in_play)
+      combatant.hand
       |> Enum.filter(&(&1.type == :armor))
       |> Enum.filter(fn card ->
         card.damage != :destroyed and
@@ -805,20 +806,19 @@ defmodule Botgrade.Game.CombatLogic do
 
     # Clear dice from non-capacitor card slots
     hand_cards = clear_dice_from_cards(combatant.hand)
-    in_play_cards = clear_dice_from_cards(combatant.in_play)
 
-    all_cards = hand_cards ++ in_play_cards
-
-    # Clear activation results and shield_base_bonus so cards don't show stale info when redrawn
+    # Clear activation flags, results, and shield_base_bonus
     all_cards =
-      Enum.map(all_cards, fn card ->
+      Enum.map(hand_cards, fn card ->
         card = %{card | last_result: nil}
+        props = Map.delete(card.properties, :activated_this_turn)
 
-        if card.type == :armor do
-          %{card | properties: Map.delete(card.properties, :shield_base_bonus)}
-        else
-          card
-        end
+        props =
+          if card.type == :armor,
+            do: Map.delete(props, :shield_base_bonus),
+            else: props
+
+        %{card | properties: props}
       end)
 
     # Capacitors with stored dice stay in hand for next turn
@@ -834,7 +834,6 @@ defmodule Botgrade.Game.CombatLogic do
       combatant
       | hand: charged_capacitors,
         discard: combatant.discard ++ to_discard,
-        in_play: [],
         installed: installed,
         available_dice: [],
         # Shield resets each turn, plating persists
@@ -866,7 +865,7 @@ defmodule Botgrade.Game.CombatLogic do
 
   @spec check_defeat(Robot.t()) :: :alive | {:defeated, atom()}
   def check_defeat(robot) do
-    all_cards = robot.installed ++ robot.deck ++ robot.hand ++ robot.discard ++ robot.in_play
+    all_cards = robot.installed ++ robot.deck ++ robot.hand ++ robot.discard
 
     installed_alive =
       robot.installed
@@ -961,10 +960,6 @@ defmodule Botgrade.Game.CombatLogic do
     Enum.find(robot.hand, &(&1.id == card_id))
   end
 
-  defp find_card_in_hand_or_play(robot, card_id) do
-    Enum.find(robot.hand, &(&1.id == card_id)) ||
-      Enum.find(robot.in_play, &(&1.id == card_id))
-  end
 
   defp find_slot(card, slot_id) do
     case Enum.find_index(card.dice_slots, &(&1.id == slot_id)) do
@@ -989,25 +984,21 @@ defmodule Botgrade.Game.CombatLogic do
     %{card | dice_slots: updated_slots}
   end
 
-  defp move_card_to_in_play(robot, card_id, cleared_card) do
-    hand = Enum.reject(robot.hand, &(&1.id == card_id))
-    in_play_without = Enum.reject(robot.in_play, &(&1.id == card_id))
-    %{robot | hand: hand, in_play: in_play_without ++ [cleared_card]}
+  defp mark_card_activated_in_hand(robot, card_id, result_card) do
+    activated_card = %{result_card | properties: Map.put(result_card.properties, :activated_this_turn, true)}
+    %{robot | hand: replace_card(robot.hand, card_id, activated_card)}
   end
 
   defp update_card_in_zones(robot, card_id, updated_card) do
     %{
       robot
       | installed: replace_card(robot.installed, card_id, updated_card),
-        hand: replace_card(robot.hand, card_id, updated_card),
-        in_play: replace_card(robot.in_play, card_id, updated_card)
+        hand: replace_card(robot.hand, card_id, updated_card)
     }
   end
 
   defp clear_dice_from_cards(cards) do
     Enum.map(cards, fn card ->
-      card = reset_battery_flag(card)
-
       if card.type == :capacitor do
         card
       else
@@ -1016,12 +1007,6 @@ defmodule Botgrade.Game.CombatLogic do
       end
     end)
   end
-
-  defp reset_battery_flag(%Card{type: :battery} = card) do
-    %{card | properties: Map.delete(card.properties, :activated_this_turn)}
-  end
-
-  defp reset_battery_flag(card), do: card
 
   defp reset_cpu_flag(%Card{type: :cpu} = card) do
     %{card | properties: Map.delete(card.properties, :activated_this_turn)}

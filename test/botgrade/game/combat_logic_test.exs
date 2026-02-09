@@ -115,12 +115,13 @@ defmodule Botgrade.Game.CombatLogicTest do
     test "assigns die to an empty slot and triggers immediate activation", %{state: state} do
       {:ok, new_state} = CombatLogic.allocate_die(state, 0, "wpn_test", "power_1")
       # Weapon has 1 slot, so filling it triggers immediate activation
-      # Card moves to in_play with cleared slots, enemy takes 5 damage
+      # Card stays in hand with activated_this_turn flag set
       assert Robot.current_hp(new_state.enemy) == 4
       assert length(new_state.player.available_dice) == 1
-      # Card should be in in_play now
-      assert Enum.any?(new_state.player.in_play, &(&1.id == "wpn_test"))
-      assert not Enum.any?(new_state.player.hand, &(&1.id == "wpn_test"))
+      card = Enum.find(new_state.player.hand, &(&1.id == "wpn_test"))
+      assert card != nil
+      assert Map.get(card.properties, :activated_this_turn, false) == true
+      assert card.dice_slots |> Enum.all?(&is_nil(&1.assigned_die))
     end
 
     test "rejects die that doesn't meet condition", %{state: state} do
@@ -264,6 +265,68 @@ defmodule Botgrade.Game.CombatLogicTest do
     end
   end
 
+  describe "activation guard" do
+    test "rejects die allocation to an already-activated weapon" do
+      weapon = %Card{
+        id: "wpn_used",
+        name: "Used Weapon",
+        type: :weapon,
+        properties: %{damage_base: 0, damage_type: :energy, activated_this_turn: true},
+        dice_slots: [%{id: "power_1", condition: nil, assigned_die: nil}]
+      }
+
+      state = %CombatState{
+        id: "test",
+        player: %Robot{
+          id: "player",
+          name: "Player",
+          hand: [weapon],
+          available_dice: [%{sides: 6, value: 5}],
+          installed: [%Card{id: "chs", name: "Frame", type: :chassis, properties: %{card_hp: 9}, dice_slots: [], current_hp: 9}]
+        },
+        enemy: %Robot{
+          id: "enemy",
+          name: "Enemy",
+          installed: [%Card{id: "chs", name: "Frame", type: :chassis, properties: %{card_hp: 9}, dice_slots: [], current_hp: 9}]
+        },
+        phase: :power_up
+      }
+
+      assert {:error, "Card already activated this turn."} =
+               CombatLogic.allocate_die(state, 0, "wpn_used", "power_1")
+    end
+
+    test "rejects die allocation to an already-activated armor" do
+      armor = %Card{
+        id: "arm_used",
+        name: "Used Armor",
+        type: :armor,
+        properties: %{shield_base: 1, armor_type: :shield, activated_this_turn: true},
+        dice_slots: [%{id: "power_1", condition: nil, assigned_die: nil}]
+      }
+
+      state = %CombatState{
+        id: "test",
+        player: %Robot{
+          id: "player",
+          name: "Player",
+          hand: [armor],
+          available_dice: [%{sides: 6, value: 5}],
+          installed: [%Card{id: "chs", name: "Frame", type: :chassis, properties: %{card_hp: 9}, dice_slots: [], current_hp: 9}]
+        },
+        enemy: %Robot{
+          id: "enemy",
+          name: "Enemy",
+          installed: [%Card{id: "chs", name: "Frame", type: :chassis, properties: %{card_hp: 9}, dice_slots: [], current_hp: 9}]
+        },
+        phase: :power_up
+      }
+
+      assert {:error, "Card already activated this turn."} =
+               CombatLogic.allocate_die(state, 0, "arm_used", "power_1")
+    end
+  end
+
   describe "plating vs shield" do
     test "damage is absorbed by plating first, then shield, then HP" do
       weapon = %Card{
@@ -397,10 +460,11 @@ defmodule Botgrade.Game.CombatLogicTest do
       assert new_state.player.shield == 4
       # Enemy HP unchanged — no damage dealt
       assert Robot.current_hp(new_state.enemy) == 9
-      # Card moved to in_play with shield result
-      card = Enum.find(new_state.player.in_play, &(&1.id == "wpn_dual"))
+      # Card stays in hand with shield result and activated flag
+      card = Enum.find(new_state.player.hand, &(&1.id == "wpn_dual"))
       assert card.last_result.type == :shield
       assert card.last_result.value == 4
+      assert Map.get(card.properties, :activated_this_turn, false) == true
     end
 
     test "weapon deals damage when die does not meet dual_mode condition" do
@@ -438,8 +502,9 @@ defmodule Botgrade.Game.CombatLogicTest do
       # Plasma bypasses plating/shield but is halved vs chassis: floor(4 * 0.5) = 2
       assert Robot.current_hp(new_state.enemy) == 7
       assert new_state.player.shield == 0
-      card = Enum.find(new_state.player.in_play, &(&1.id == "wpn_dual"))
+      card = Enum.find(new_state.player.hand, &(&1.id == "wpn_dual"))
       assert card.last_result.type == :damage
+      assert Map.get(card.properties, :activated_this_turn, false) == true
     end
 
     test "feedback loop generates shield with low die" do

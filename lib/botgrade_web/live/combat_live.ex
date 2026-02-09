@@ -163,7 +163,7 @@ defmodule BotgradeWeb.CombatLive do
   def handle_event("return_to_map", _params, socket) do
     campaign_id = socket.assigns.campaign_id
     player = socket.assigns.state.player
-    player_cards = player.installed ++ player.deck ++ player.hand ++ player.discard ++ player.in_play
+    player_cards = player.installed ++ player.deck ++ player.hand ++ player.discard
     result = socket.assigns.state.result
 
     Botgrade.Campaign.CampaignServer.complete_combat(
@@ -179,7 +179,7 @@ defmodule BotgradeWeb.CombatLive do
   @impl true
   def handle_event("next_combat", _params, socket) do
     player = socket.assigns.state.player
-    player_cards = player.installed ++ player.deck ++ player.hand ++ player.discard ++ player.in_play
+    player_cards = player.installed ++ player.deck ++ player.hand ++ player.discard
     combat_id = Base.encode16(:crypto.strong_rand_bytes(4), case: :lower)
 
     {enemy_type, _name, _desc} = Enum.random(Botgrade.Game.StarterDecks.enemy_types())
@@ -244,16 +244,6 @@ defmodule BotgradeWeb.CombatLive do
           result={@state.result}
           target_lock_active={@state.target_lock_active}
           overclock_active={@state.overclock_active}
-        />
-
-        <%!-- In Play Area --%>
-        <.card_area
-          :if={@state.player.in_play != []}
-          title="In Play"
-          cards={@state.player.in_play}
-          phase={@state.phase}
-          selected_die={@selected_die}
-          selected_die_value={@die_value}
         />
 
         <%!-- Dice Pool --%>

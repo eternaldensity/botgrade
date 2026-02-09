@@ -8,8 +8,8 @@ defmodule Botgrade.Game.ScavengeLogic do
     enemy = state.enemy
     player = state.player
 
-    all_enemy_cards = enemy.installed ++ enemy.deck ++ enemy.hand ++ enemy.discard ++ enemy.in_play
-    all_player_cards = player.installed ++ player.deck ++ player.hand ++ player.discard ++ player.in_play
+    all_enemy_cards = enemy.installed ++ enemy.deck ++ enemy.hand ++ enemy.discard
+    all_player_cards = player.installed ++ player.deck ++ player.hand ++ player.discard
 
     # Generate scrap from destroyed cards on BOTH sides (before salvage degradation)
     scraps = ScrapLogic.generate_scrap_from_cards(all_enemy_cards ++ all_player_cards)
@@ -66,11 +66,11 @@ defmodule Botgrade.Game.ScavengeLogic do
     player = state.player
 
     all_player_cards =
-      (player.installed ++ player.deck ++ player.hand ++ player.discard ++ player.in_play ++ taken_cards)
+      (player.installed ++ player.deck ++ player.hand ++ player.discard ++ taken_cards)
       |> Enum.reject(&(&1.damage == :destroyed))
       |> Enum.map(&reset_card_state/1)
     merged_resources = ScrapLogic.merge_resources(player.resources, state.scavenge_scraps)
-    updated_player = %{player | deck: all_player_cards, hand: [], discard: [], in_play: [], installed: [], resources: merged_resources}
+    updated_player = %{player | deck: all_player_cards, hand: [], discard: [], installed: [], resources: merged_resources}
 
     log_msg =
       if taken_cards == [],
@@ -125,12 +125,11 @@ defmodule Botgrade.Game.ScavengeLogic do
 
     props = Map.delete(card.properties, :overkill)
 
+    props = Map.delete(props, :activated_this_turn)
+
     case card.type do
       :battery ->
-        %{card | properties: %{props | remaining_activations: props.max_activations} |> Map.delete(:activated_this_turn)}
-
-      :cpu ->
-        %{card | properties: Map.delete(props, :activated_this_turn)}
+        %{card | properties: %{props | remaining_activations: props.max_activations}}
 
       _ ->
         %{card | properties: props}

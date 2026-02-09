@@ -45,7 +45,7 @@ defmodule Botgrade.Game.ScavengeLogicTest do
         deck: [%Card{id: "p_chs", name: "Player Frame", type: :chassis, properties: %{card_hp: 9}, dice_slots: []}],
         hand: [],
         discard: [],
-        in_play: [],
+
         installed: [%Card{id: "p_chs_inst", name: "Player Frame", type: :chassis, properties: %{card_hp: 9}, dice_slots: [], current_hp: 5}]
       },
       enemy: %Robot{
@@ -54,7 +54,7 @@ defmodule Botgrade.Game.ScavengeLogicTest do
         deck: make_enemy_cards(),
         hand: [],
         discard: [],
-        in_play: [],
+
         installed: [%Card{id: "e_chs_inst", name: "Enemy Frame", type: :chassis, properties: %{card_hp: 9}, dice_slots: [], current_hp: 0}]
       },
       result: :player_wins
@@ -163,12 +163,11 @@ defmodule Botgrade.Game.ScavengeLogicTest do
     end
 
     test "consolidates all player cards into deck" do
-      player = %{won_state().player | deck: [], hand: [hd(make_enemy_cards())], discard: [], in_play: []}
+      player = %{won_state().player | deck: [], hand: [hd(make_enemy_cards())], discard: []}
       state = %{won_state() | player: player, phase: :scavenging, scavenge_loot: make_enemy_cards(), scavenge_selected: []}
       new_state = ScavengeLogic.confirm_scavenge(state)
       assert new_state.player.hand == []
       assert new_state.player.discard == []
-      assert new_state.player.in_play == []
       # 1 hand card + 1 installed card consolidated into deck
       assert length(new_state.player.deck) == 2
     end

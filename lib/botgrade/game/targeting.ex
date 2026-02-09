@@ -16,11 +16,11 @@ defmodule Botgrade.Game.Targeting do
 
   @doc """
   Returns all alive cards on a robot that can be targeted by attacks.
-  Includes installed, in_play, and hand cards with current_hp > 0.
+  Includes installed and hand cards with current_hp > 0.
   """
   @spec targetable_cards(Robot.t()) :: [Card.t()]
   def targetable_cards(robot) do
-    (robot.installed ++ robot.in_play ++ robot.hand)
+    (robot.installed ++ robot.hand)
     |> Enum.filter(&(&1.current_hp != nil and &1.current_hp > 0))
   end
 
