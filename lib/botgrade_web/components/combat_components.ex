@@ -82,6 +82,8 @@ defmodule BotgradeWeb.CombatComponents do
   attr(:phase, :atom, required: true)
   attr(:turn_number, :integer, required: true)
   attr(:result, :atom, required: true)
+  attr(:target_lock_active, :boolean, default: false)
+  attr(:overclock_active, :boolean, default: false)
 
   def phase_controls(assigns) do
     ~H"""
@@ -92,6 +94,12 @@ defmodule BotgradeWeb.CombatComponents do
         </span>
         <span class="text-sm font-semibold text-base-content/80">
           {phase_label(@phase)}
+        </span>
+        <span :if={@target_lock_active} class="badge badge-sm badge-warning animate-pulse">
+          TARGET LOCK
+        </span>
+        <span :if={@overclock_active} class="badge badge-sm badge-warning animate-pulse">
+          OVERCLOCK
         </span>
       </div>
 
@@ -167,12 +175,20 @@ defmodule BotgradeWeb.CombatComponents do
   attr(:selected_die_value, :map, default: nil)
   attr(:cpu_targeting, :string, default: nil)
   attr(:cpu_discard_selected, :list, default: [])
+  attr(:cpu_targeting_mode, :atom, default: nil)
+  attr(:cpu_selected_installed, :string, default: nil)
 
   def game_card(assigns) do
     interactable = card_interactable?(assigns.card, assigns.phase)
     destroyed = assigns.card.damage == :destroyed
-    cpu_selectable = not is_nil(assigns.cpu_targeting) and not destroyed
-    cpu_selected = assigns.card.id in assigns.cpu_discard_selected
+
+    cpu_selectable =
+      not is_nil(assigns.cpu_targeting) and not destroyed and
+        card_matches_targeting_mode?(assigns.card, assigns.cpu_targeting_mode)
+
+    cpu_selected =
+      assigns.card.id in assigns.cpu_discard_selected or
+        assigns.card.id == assigns.cpu_selected_installed
 
     assigns =
       assigns
@@ -193,7 +209,7 @@ defmodule BotgradeWeb.CombatComponents do
         @cpu_selected && "ring-2 ring-secondary bg-secondary/10",
         @cpu_selectable and not @cpu_selected && "cursor-pointer hover:ring-2 hover:ring-secondary/60"
       ]}
-      phx-click={if @cpu_selectable, do: "toggle_cpu_discard"}
+      phx-click={if @cpu_selectable, do: cpu_click_event(@cpu_targeting_mode)}
       phx-value-card-id={if @cpu_selectable, do: @card.id}
     >
       <%!-- Header: icon + name + type badge --%>
@@ -384,6 +400,7 @@ defmodule BotgradeWeb.CombatComponents do
   attr(:phase, :atom, default: nil)
   attr(:cpu_targeting, :string, default: nil)
   attr(:cpu_discard_selected, :list, default: [])
+  attr(:cpu_targeting_mode, :atom, default: nil)
 
   def installed_components(assigns) do
     ~H"""
@@ -402,6 +419,7 @@ defmodule BotgradeWeb.CombatComponents do
             phase={@phase}
             cpu_targeting={@cpu_targeting}
             cpu_discard_selected={@cpu_discard_selected}
+            cpu_targeting_mode={@cpu_targeting_mode}
           />
         </div>
       </div>
@@ -416,6 +434,7 @@ defmodule BotgradeWeb.CombatComponents do
   attr(:phase, :atom, default: nil)
   attr(:cpu_targeting, :string, default: nil)
   attr(:cpu_discard_selected, :list, default: [])
+  attr(:cpu_targeting_mode, :atom, default: nil)
 
   defp installed_card(assigns) do
     max_hp = Map.get(assigns.card.properties, :card_hp, 2)
@@ -480,27 +499,34 @@ defmodule BotgradeWeb.CombatComponents do
         Used this turn
       </span>
 
-      <%!-- CPU Targeting Mode: selection count + Confirm/Cancel --%>
+      <%!-- CPU Targeting Mode: ability-specific UI --%>
       <div :if={@cpu_targeting == @card.id and not @destroyed} class="mt-1 space-y-1">
-        <span class="text-[10px] text-secondary font-semibold">
-          Discard {@card.properties.cpu_ability.discard_count} card(s)
-          ({length(@cpu_discard_selected)} selected)
-        </span>
-        <div class="flex gap-1">
-          <button
-            :if={length(@cpu_discard_selected) == @card.properties.cpu_ability.discard_count}
-            phx-click="confirm_cpu_ability"
-            class="btn btn-xs btn-success flex-1"
-          >
-            Confirm
-          </button>
-          <button
-            phx-click="cancel_cpu_ability"
-            class="btn btn-xs btn-ghost flex-1"
-          >
-            Cancel
-          </button>
-        </div>
+        <%= case @cpu_targeting_mode do %>
+          <% :select_hand_cards -> %>
+            <span class="text-[10px] text-secondary font-semibold">
+              Discard {@card.properties.cpu_ability.discard_count} card(s)
+              ({length(@cpu_discard_selected)} selected)
+            </span>
+            <div class="flex gap-1">
+              <button
+                :if={length(@cpu_discard_selected) == @card.properties.cpu_ability.discard_count}
+                phx-click="confirm_cpu_ability"
+                class="btn btn-xs btn-success flex-1"
+              >
+                Confirm
+              </button>
+              <button phx-click="cancel_cpu_ability" class="btn btn-xs btn-ghost flex-1">Cancel</button>
+            </div>
+          <% :select_installed_card -> %>
+            <span class="text-[10px] text-secondary font-semibold">
+              {cpu_targeting_label(@card.properties.cpu_ability)}
+            </span>
+            <div class="flex gap-1">
+              <button phx-click="confirm_cpu_ability" class="btn btn-xs btn-success flex-1">Confirm</button>
+              <button phx-click="cancel_cpu_ability" class="btn btn-xs btn-ghost flex-1">Cancel</button>
+            </div>
+          <% _ -> %>
+        <% end %>
       </div>
     </div>
     """
@@ -665,6 +691,8 @@ defmodule BotgradeWeb.CombatComponents do
   attr(:scrollable, :boolean, default: false)
   attr(:cpu_targeting, :string, default: nil)
   attr(:cpu_discard_selected, :list, default: [])
+  attr(:cpu_targeting_mode, :atom, default: nil)
+  attr(:cpu_selected_installed, :string, default: nil)
 
   def card_area(assigns) do
     assigns =
@@ -676,7 +704,7 @@ defmodule BotgradeWeb.CombatComponents do
         <h3 class="card-title text-sm">
           {@title}
           <span class="badge badge-sm badge-ghost">{@display_count}</span>
-          <span :if={@cpu_targeting} class="badge badge-sm badge-secondary">Select cards to discard</span>
+          <span :if={@cpu_targeting} class="badge badge-sm badge-secondary">{cpu_targeting_instruction(@cpu_targeting_mode)}</span>
         </h3>
         <div class={[
           @scrollable && "flex overflow-x-auto gap-3 pb-2 snap-x md:grid md:grid-cols-3 lg:grid-cols-5 md:overflow-visible",
@@ -690,6 +718,8 @@ defmodule BotgradeWeb.CombatComponents do
               selected_die_value={@selected_die_value}
               cpu_targeting={@cpu_targeting}
               cpu_discard_selected={@cpu_discard_selected}
+              cpu_targeting_mode={@cpu_targeting_mode}
+              cpu_selected_installed={@cpu_selected_installed}
             />
           </div>
         </div>
@@ -911,7 +941,31 @@ defmodule BotgradeWeb.CombatComponents do
   defp cpu_ability_label(%{type: :discard_draw, discard_count: d, draw_count: r}),
     do: "Discard #{d}, Draw #{r}"
 
+  defp cpu_ability_label(%{type: :reflex_block}), do: "Reflex Block"
+  defp cpu_ability_label(%{type: :target_lock}), do: "Target Lock"
+  defp cpu_ability_label(%{type: :overclock_battery}), do: "Overclock"
+  defp cpu_ability_label(%{type: :siphon_power}), do: "Siphon Power"
   defp cpu_ability_label(_), do: "Processing Unit"
+
+  defp card_matches_targeting_mode?(_card, :select_hand_cards), do: true
+
+  defp card_matches_targeting_mode?(card, :select_installed_card) do
+    card.type in [:armor, :battery]
+  end
+
+  defp card_matches_targeting_mode?(_card, _), do: false
+
+  defp cpu_click_event(:select_hand_cards), do: "toggle_cpu_discard"
+  defp cpu_click_event(:select_installed_card), do: "select_cpu_target_card"
+  defp cpu_click_event(_), do: nil
+
+  defp cpu_targeting_instruction(:select_hand_cards), do: "Select cards to discard"
+  defp cpu_targeting_instruction(:select_installed_card), do: "Select a card to target"
+  defp cpu_targeting_instruction(_), do: ""
+
+  defp cpu_targeting_label(%{type: :reflex_block}), do: "Select armor to boost (+1 shield)"
+  defp cpu_targeting_label(%{type: :siphon_power}), do: "Select battery to restore (costs 2 shield)"
+  defp cpu_targeting_label(_), do: "Select a target"
 
   defp condition_label({:min, n}), do: "#{n}+"
   defp condition_label({:max, n}), do: "#{n}-"

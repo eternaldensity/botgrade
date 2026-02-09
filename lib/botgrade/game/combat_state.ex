@@ -22,7 +22,11 @@ defmodule Botgrade.Game.CombatState do
           scavenge_limit: non_neg_integer(),
           scavenge_scraps: map(),
           cpu_targeting: String.t() | nil,
-          cpu_discard_selected: [String.t()]
+          cpu_discard_selected: [String.t()],
+          cpu_targeting_mode: :select_hand_cards | :select_installed_card | nil,
+          cpu_selected_installed: String.t() | nil,
+          target_lock_active: boolean(),
+          overclock_active: boolean()
         }
 
   @enforce_keys [:id, :player, :enemy]
@@ -41,6 +45,10 @@ defmodule Botgrade.Game.CombatState do
     scavenge_scraps: %{},
     last_attack_result: nil,
     cpu_targeting: nil,
-    cpu_discard_selected: []
+    cpu_discard_selected: [],
+    cpu_targeting_mode: nil,
+    cpu_selected_installed: nil,
+    target_lock_active: false,
+    overclock_active: false
   ]
 end

@@ -105,7 +105,7 @@ defmodule Botgrade.Game.StarterDecks do
       chassis("e_chs_1", "Ironclad Core", card_hp: 5),
       chassis("e_chs_2", "Ironclad Frame", card_hp: 5),
       chassis("e_chs_3", "Reinforced Plate", card_hp: 4),
-      cpu("e_cpu_1", "Ironclad CPU", card_hp: 4),
+      cpu("e_cpu_1", "Ironclad CPU", card_hp: 4, cpu_ability: %{type: :reflex_block}),
       locomotion("e_loc_1", "Heavy Treads", speed_base: 1, card_hp: 3)
     ]
   end
@@ -149,7 +149,7 @@ defmodule Botgrade.Game.StarterDecks do
       ),
       chassis("e_chs_1", "Strikebolt Frame", card_hp: 3),
       chassis("e_chs_2", "Light Frame", card_hp: 2),
-      cpu("e_cpu_1", "Strikebolt CPU", card_hp: 2),
+      cpu("e_cpu_1", "Strikebolt CPU", card_hp: 2, cpu_ability: %{type: :target_lock}),
       locomotion("e_loc_1", "Sprint Jets", speed_base: 3, card_hp: 1)
     ]
   end
@@ -195,7 +195,7 @@ defmodule Botgrade.Game.StarterDecks do
       chassis("e_chs_1", "Hexapod Core", card_hp: 4),
       chassis("e_chs_2", "Hexapod Segment", card_hp: 3),
       chassis("e_chs_3", "Leg Segment", card_hp: 2),
-      cpu("e_cpu_1", "Hexapod Brain", card_hp: 3),
+      cpu("e_cpu_1", "Hexapod Brain", card_hp: 3, cpu_ability: %{type: :overclock_battery}),
       locomotion("e_loc_1", "Six Legs", speed_base: 2, card_hp: 2)
     ]
   end
@@ -268,7 +268,11 @@ defmodule Botgrade.Game.StarterDecks do
         targeting: %{battery: 25, capacitor: 20, cpu: 15, weapon: 15, armor: 10, chassis: 10, locomotion: 5}
       ),
       capacitor("cap_overclocked", "Overclocked Capacitor", max_stored: 4, card_hp: 2),
-      battery("bat_micro_cell", "Micro Cell", dice_count: 1, die_sides: 4, max_activations: 8, card_hp: 1)
+      battery("bat_micro_cell", "Micro Cell", dice_count: 1, die_sides: 4, max_activations: 8, card_hp: 1),
+      cpu("cpu_reflex", "Reflex Processor", card_hp: 2, cpu_ability: %{type: :reflex_block}),
+      cpu("cpu_target_lock", "Targeting Computer", card_hp: 2, cpu_ability: %{type: :target_lock}),
+      cpu("cpu_overclock", "Overclock Module", card_hp: 2, cpu_ability: %{type: :overclock_battery}),
+      cpu("cpu_siphon", "Siphon Core", card_hp: 3, cpu_ability: %{type: :siphon_power})
     ]
   end
 

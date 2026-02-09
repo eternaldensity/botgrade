@@ -355,9 +355,9 @@ defmodule Botgrade.Game.CombatLogicTest do
       assert StarterDecks.enemy_deck("unknown") == StarterDecks.enemy_deck()
     end
 
-    test "expanded_card_pool returns 13 cards" do
+    test "expanded_card_pool returns 17 cards" do
       pool = StarterDecks.expanded_card_pool()
-      assert length(pool) == 13
+      assert length(pool) == 17
     end
   end
 

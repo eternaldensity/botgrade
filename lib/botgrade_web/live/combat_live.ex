@@ -65,6 +65,14 @@ defmodule BotgradeWeb.CombatLive do
   end
 
   @impl true
+  def handle_event("select_cpu_target_card", %{"card-id" => card_id}, socket) do
+    case CombatServer.select_cpu_target_card(socket.assigns.combat_id, card_id) do
+      {:ok, _state} -> {:noreply, assign(socket, error_message: nil)}
+      {:error, reason} -> {:noreply, assign(socket, error_message: reason)}
+    end
+  end
+
+  @impl true
   def handle_event("confirm_cpu_ability", _params, socket) do
     case CombatServer.confirm_cpu_ability(socket.assigns.combat_id) do
       {:ok, _state} -> {:noreply, assign(socket, error_message: nil)}
@@ -230,7 +238,13 @@ defmodule BotgradeWeb.CombatLive do
         <.end_screen :if={@state.phase == :ended} result={@state.result} campaign_id={@campaign_id} />
 
         <%!-- Phase Controls --%>
-        <.phase_controls phase={@state.phase} turn_number={@state.turn_number} result={@state.result} />
+        <.phase_controls
+          phase={@state.phase}
+          turn_number={@state.turn_number}
+          result={@state.result}
+          target_lock_active={@state.target_lock_active}
+          overclock_active={@state.overclock_active}
+        />
 
         <%!-- In Play Area --%>
         <.card_area
@@ -257,6 +271,7 @@ defmodule BotgradeWeb.CombatLive do
           phase={@state.phase}
           cpu_targeting={@state.cpu_targeting}
           cpu_discard_selected={@state.cpu_discard_selected}
+          cpu_targeting_mode={@state.cpu_targeting_mode}
         />
 
         <%!-- Player Hand --%>
@@ -269,6 +284,8 @@ defmodule BotgradeWeb.CombatLive do
           count={length(@state.player.hand)}
           cpu_targeting={@state.cpu_targeting}
           cpu_discard_selected={@state.cpu_discard_selected}
+          cpu_targeting_mode={@state.cpu_targeting_mode}
+          cpu_selected_installed={@state.cpu_selected_installed}
           scrollable
         />
       </div>
