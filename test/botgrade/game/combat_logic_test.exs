@@ -355,9 +355,163 @@ defmodule Botgrade.Game.CombatLogicTest do
       assert StarterDecks.enemy_deck("unknown") == StarterDecks.enemy_deck()
     end
 
-    test "expanded_card_pool returns 8 cards" do
+    test "expanded_card_pool returns 13 cards" do
       pool = StarterDecks.expanded_card_pool()
-      assert length(pool) == 8
+      assert length(pool) == 13
+    end
+  end
+
+  describe "dual-mode weapons" do
+    test "weapon generates shield when die meets dual_mode condition" do
+      weapon = %Card{
+        id: "wpn_dual",
+        name: "Plasma Arc Generator",
+        type: :weapon,
+        properties: %{
+          damage_base: 0,
+          damage_type: :plasma,
+          dual_mode: %{condition: :odd, armor_type: :shield, shield_base: 1}
+        },
+        dice_slots: [%{id: "power_1", condition: nil, assigned_die: nil}]
+      }
+
+      state = %CombatState{
+        id: "test",
+        player: %Robot{
+          id: "player",
+          name: "Player",
+          hand: [weapon],
+          available_dice: [%{sides: 6, value: 3}],
+          installed: [%Card{id: "chs", name: "Frame", type: :chassis, properties: %{card_hp: 9}, dice_slots: [], current_hp: 9}]
+        },
+        enemy: %Robot{
+          id: "enemy",
+          name: "Enemy",
+          installed: [%Card{id: "chs", name: "Frame", type: :chassis, properties: %{card_hp: 9}, dice_slots: [], current_hp: 9}]
+        },
+        phase: :power_up
+      }
+
+      {:ok, new_state} = CombatLogic.allocate_die(state, 0, "wpn_dual", "power_1")
+      # Odd die (3) triggers shield mode: shield_base 1 + die 3 = 4 shield
+      assert new_state.player.shield == 4
+      # Enemy HP unchanged — no damage dealt
+      assert Robot.current_hp(new_state.enemy) == 9
+      # Card moved to in_play with shield result
+      card = Enum.find(new_state.player.in_play, &(&1.id == "wpn_dual"))
+      assert card.last_result.type == :shield
+      assert card.last_result.value == 4
+    end
+
+    test "weapon deals damage when die does not meet dual_mode condition" do
+      weapon = %Card{
+        id: "wpn_dual",
+        name: "Plasma Arc Generator",
+        type: :weapon,
+        properties: %{
+          damage_base: 0,
+          damage_type: :plasma,
+          dual_mode: %{condition: :odd, armor_type: :shield, shield_base: 1}
+        },
+        dice_slots: [%{id: "power_1", condition: nil, assigned_die: nil}]
+      }
+
+      state = %CombatState{
+        id: "test",
+        player: %Robot{
+          id: "player",
+          name: "Player",
+          hand: [weapon],
+          available_dice: [%{sides: 6, value: 4}],
+          installed: [%Card{id: "chs", name: "Frame", type: :chassis, properties: %{card_hp: 9}, dice_slots: [], current_hp: 9}]
+        },
+        enemy: %Robot{
+          id: "enemy",
+          name: "Enemy",
+          installed: [%Card{id: "chs", name: "Frame", type: :chassis, properties: %{card_hp: 9}, dice_slots: [], current_hp: 9}]
+        },
+        phase: :power_up
+      }
+
+      {:ok, new_state} = CombatLogic.allocate_die(state, 0, "wpn_dual", "power_1")
+      # Even die (4) triggers damage mode: plasma damage = 0 + 4 = 4
+      # Plasma bypasses plating/shield but is halved vs chassis: floor(4 * 0.5) = 2
+      assert Robot.current_hp(new_state.enemy) == 7
+      assert new_state.player.shield == 0
+      card = Enum.find(new_state.player.in_play, &(&1.id == "wpn_dual"))
+      assert card.last_result.type == :damage
+    end
+
+    test "feedback loop generates shield with low die" do
+      weapon = %Card{
+        id: "wpn_fb",
+        name: "Feedback Loop",
+        type: :weapon,
+        properties: %{
+          damage_base: 1,
+          damage_type: :energy,
+          dual_mode: %{condition: {:max, 2}, armor_type: :shield, shield_base: 2}
+        },
+        dice_slots: [%{id: "power_1", condition: nil, assigned_die: nil}]
+      }
+
+      state = %CombatState{
+        id: "test",
+        player: %Robot{
+          id: "player",
+          name: "Player",
+          hand: [weapon],
+          available_dice: [%{sides: 6, value: 1}],
+          installed: [%Card{id: "chs", name: "Frame", type: :chassis, properties: %{card_hp: 9}, dice_slots: [], current_hp: 9}]
+        },
+        enemy: %Robot{
+          id: "enemy",
+          name: "Enemy",
+          installed: [%Card{id: "chs", name: "Frame", type: :chassis, properties: %{card_hp: 9}, dice_slots: [], current_hp: 9}]
+        },
+        phase: :power_up
+      }
+
+      {:ok, new_state} = CombatLogic.allocate_die(state, 0, "wpn_fb", "power_1")
+      # Die 1 meets {:max, 2}: shield_base 2 + die 1 = 3 shield
+      assert new_state.player.shield == 3
+      assert Robot.current_hp(new_state.enemy) == 9
+    end
+
+    test "feedback loop deals damage with high die" do
+      weapon = %Card{
+        id: "wpn_fb",
+        name: "Feedback Loop",
+        type: :weapon,
+        properties: %{
+          damage_base: 1,
+          damage_type: :energy,
+          dual_mode: %{condition: {:max, 2}, armor_type: :shield, shield_base: 2}
+        },
+        dice_slots: [%{id: "power_1", condition: nil, assigned_die: nil}]
+      }
+
+      state = %CombatState{
+        id: "test",
+        player: %Robot{
+          id: "player",
+          name: "Player",
+          hand: [weapon],
+          available_dice: [%{sides: 6, value: 5}],
+          installed: [%Card{id: "chs", name: "Frame", type: :chassis, properties: %{card_hp: 9}, dice_slots: [], current_hp: 9}]
+        },
+        enemy: %Robot{
+          id: "enemy",
+          name: "Enemy",
+          installed: [%Card{id: "chs", name: "Frame", type: :chassis, properties: %{card_hp: 9}, dice_slots: [], current_hp: 9}]
+        },
+        phase: :power_up
+      }
+
+      {:ok, new_state} = CombatLogic.allocate_die(state, 0, "wpn_fb", "power_1")
+      # Die 5 does NOT meet {:max, 2}: energy damage = 1 + 5 = 6
+      assert Robot.current_hp(new_state.enemy) < 9
+      assert new_state.player.shield == 0
     end
   end
 

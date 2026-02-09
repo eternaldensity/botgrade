@@ -228,6 +228,21 @@ defmodule Botgrade.Game.CombatLogic do
   end
 
   defp activate_weapon(state, weapon, who) do
+    dual_mode = Map.get(weapon.properties, :dual_mode)
+
+    dice_values =
+      weapon.dice_slots
+      |> Enum.filter(&(&1.assigned_die != nil))
+      |> Enum.map(& &1.assigned_die.value)
+
+    if dual_mode && Enum.all?(dice_values, &Card.meets_condition?(dual_mode.condition, &1)) do
+      activate_weapon_as_armor(state, weapon, who, dual_mode)
+    else
+      activate_weapon_as_damage(state, weapon, who)
+    end
+  end
+
+  defp activate_weapon_as_damage(state, weapon, who) do
     {attacker, defender} = get_combatants(state, who)
     who_name = if who == :player, do: "You", else: "Enemy"
 
@@ -298,6 +313,54 @@ defmodule Botgrade.Game.CombatLogic do
     add_log(state, log_msg)
   end
 
+  defp activate_weapon_as_armor(state, weapon, who, dual_mode) do
+    {combatant, _defender} = get_combatants(state, who)
+    who_name = if who == :player, do: "You", else: "Enemy"
+
+    raw_value =
+      weapon.dice_slots
+      |> Enum.filter(&(&1.assigned_die != nil))
+      |> Enum.reduce(dual_mode.shield_base, fn slot, acc ->
+        acc + slot.assigned_die.value
+      end)
+
+    value = apply_damage_penalty(raw_value, weapon)
+
+    penalty_msg =
+      if weapon.damage == :damaged and raw_value != value,
+        do: " (halved from #{raw_value} - damaged)",
+        else: ""
+
+    armor_type = dual_mode.armor_type
+
+    {combatant, log_msg} =
+      case armor_type do
+        :plating ->
+          combatant = %{combatant | plating: combatant.plating + value}
+          {combatant, "#{who_name} activates #{weapon.name} (defense mode): +#{value} plating#{penalty_msg}."}
+
+        :shield ->
+          combatant = %{combatant | shield: combatant.shield + value}
+          {combatant, "#{who_name} activates #{weapon.name} (defense mode): +#{value} shield#{penalty_msg}."}
+      end
+
+    dice_used = Enum.map(weapon.dice_slots, & &1.assigned_die) |> Enum.reject(&is_nil/1)
+
+    result_card =
+      weapon
+      |> clear_card_slots()
+      |> Map.put(:last_result, %{type: armor_type, value: value, dice: dice_used})
+
+    combatant = move_card_to_in_play(combatant, weapon.id, result_card)
+
+    state =
+      if who == :player,
+        do: %{state | player: combatant},
+        else: %{state | enemy: combatant}
+
+    add_log(state, log_msg)
+  end
+
   defp activate_armor(state, armor, who) do
     {combatant, _defender} = get_combatants(state, who)
     who_name = if who == :player, do: "You", else: "Enemy"
@@ -362,44 +425,76 @@ defmodule Botgrade.Game.CombatLogic do
 
     {attacker, defender, log_entries} =
       Enum.reduce(weapons, {attacker, defender, []}, fn weapon, {att_acc, def_acc, logs} ->
-        raw_damage = calculate_weapon_damage(weapon)
-        total_damage = apply_damage_penalty(raw_damage, weapon)
+        dual_mode = Map.get(weapon.properties, :dual_mode)
 
-        penalty_msg =
-          if weapon.damage == :damaged and raw_damage != total_damage,
-            do: " (halved from #{raw_damage} - damaged)",
-            else: ""
+        dice_values =
+          weapon.dice_slots
+          |> Enum.filter(&(&1.assigned_die != nil))
+          |> Enum.map(& &1.assigned_die.value)
 
-        targeting_profile = Map.get(weapon.properties, :targeting_profile)
-        targetable = Targeting.targetable_cards(def_acc)
+        if dual_mode && Enum.all?(dice_values, &Card.meets_condition?(dual_mode.condition, &1)) do
+          # Dual-mode: generate defense instead of damage
+          raw_value = Enum.reduce(dice_values, dual_mode.shield_base, &(&1 + &2))
+          value = apply_damage_penalty(raw_value, weapon)
 
-        case Targeting.select_target(targeting_profile, targetable) do
-          nil ->
-            {att_acc, def_acc, logs ++ ["#{who_name} fires #{weapon.name} but finds no target!"]}
+          penalty_msg =
+            if weapon.damage == :damaged and raw_value != value,
+              do: " (halved from #{raw_value} - damaged)",
+              else: ""
 
-          target ->
-            damage_type = weapon.properties.damage_type
+          {att_acc, log_msg} =
+            case dual_mode.armor_type do
+              :plating ->
+                att_acc = %{att_acc | plating: att_acc.plating + value}
+                {att_acc, "#{who_name} activates #{weapon.name} (defense mode): +#{value} plating#{penalty_msg}."}
 
-            {def_acc, updated_target, card_dmg, absorb_msg} =
-              Damage.apply_typed_damage(def_acc, target, total_damage, damage_type)
+              :shield ->
+                att_acc = %{att_acc | shield: att_acc.shield + value}
+                {att_acc, "#{who_name} activates #{weapon.name} (defense mode): +#{value} shield#{penalty_msg}."}
+            end
 
-            def_acc = update_card_in_zones(def_acc, target.id, updated_target)
+          {att_acc, def_acc, logs ++ [log_msg]}
+        else
+          # Normal weapon damage
+          raw_damage = calculate_weapon_damage(weapon)
+          total_damage = apply_damage_penalty(raw_damage, weapon)
 
-            destroyed_msg = if updated_target.current_hp <= 0, do: " DESTROYED!", else: ""
+          penalty_msg =
+            if weapon.damage == :damaged and raw_damage != total_damage,
+              do: " (halved from #{raw_damage} - damaged)",
+              else: ""
 
-            damaged_msg =
-              if updated_target.damage == :damaged and target.damage != :damaged,
-                do: " (damaged)",
-                else: ""
+          targeting_profile = Map.get(weapon.properties, :targeting_profile)
+          targetable = Targeting.targetable_cards(def_acc)
 
-            type_label = damage_type_label(damage_type)
+          case Targeting.select_target(targeting_profile, targetable) do
+            nil ->
+              {att_acc, def_acc, logs ++ ["#{who_name} fires #{weapon.name} but finds no target!"]}
 
-            log_msg =
-              "#{who_name} fires #{weapon.name} (#{type_label}) for #{total_damage}#{penalty_msg}" <>
-                " -> hits #{target.name}#{absorb_msg}." <>
-                " #{card_dmg} to #{target.name}#{damaged_msg}#{destroyed_msg}"
+            target ->
+              damage_type = weapon.properties.damage_type
 
-            {att_acc, def_acc, logs ++ [log_msg]}
+              {def_acc, updated_target, card_dmg, absorb_msg} =
+                Damage.apply_typed_damage(def_acc, target, total_damage, damage_type)
+
+              def_acc = update_card_in_zones(def_acc, target.id, updated_target)
+
+              destroyed_msg = if updated_target.current_hp <= 0, do: " DESTROYED!", else: ""
+
+              damaged_msg =
+                if updated_target.damage == :damaged and target.damage != :damaged,
+                  do: " (damaged)",
+                  else: ""
+
+              type_label = damage_type_label(damage_type)
+
+              log_msg =
+                "#{who_name} fires #{weapon.name} (#{type_label}) for #{total_damage}#{penalty_msg}" <>
+                  " -> hits #{target.name}#{absorb_msg}." <>
+                  " #{card_dmg} to #{target.name}#{damaged_msg}#{destroyed_msg}"
+
+              {att_acc, def_acc, logs ++ [log_msg]}
+          end
         end
       end)
 

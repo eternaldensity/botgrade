@@ -132,13 +132,13 @@ defmodule Botgrade.Game.StarterDecks do
         card_hp: 2,
         targeting: %{weapon: 25, battery: 20, armor: 15, chassis: 15, capacitor: 10, cpu: 10, locomotion: 5}
       ),
-      weapon("e_wpn_3", "Arc Discharger",
-        damage_base: 0,
+      weapon("e_wpn_3", "Feedback Loop",
+        damage_base: 1,
         damage_type: :energy,
         slots: 1,
         card_hp: 2,
-        condition: {:min, 3},
-        targeting: %{cpu: 40, battery: 20, capacitor: 15, weapon: 10, armor: 5, chassis: 5, locomotion: 5}
+        dual_mode: %{condition: {:max, 2}, armor_type: :shield, shield_base: 2},
+        targeting: %{battery: 25, capacitor: 20, cpu: 15, weapon: 15, armor: 10, chassis: 10, locomotion: 5}
       ),
       armor("e_arm_1", "Flicker Shield",
         shield_base: 1,
@@ -161,12 +161,12 @@ defmodule Botgrade.Game.StarterDecks do
     [
       battery("e_bat_1", "Hexapod Reactor", dice_count: 2, die_sides: 6, max_activations: 4, card_hp: 2),
       battery("e_bat_2", "Aux Cell", dice_count: 1, die_sides: 4, max_activations: 5, card_hp: 2),
-      weapon("e_wpn_1", "Chem Sprayer",
+      weapon("e_wpn_1", "Plasma Arc Generator",
         damage_base: 0,
         damage_type: :plasma,
         slots: 1,
-        card_hp: 2,
-        condition: :even,
+        card_hp: 3,
+        dual_mode: %{condition: :odd, armor_type: :shield, shield_base: 1},
         targeting: %{chassis: 30, weapon: 20, armor: 15, battery: 15, cpu: 10, capacitor: 5, locomotion: 5}
       ),
       weapon("e_wpn_2", "Pincer Strike",
@@ -242,7 +242,33 @@ defmodule Botgrade.Game.StarterDecks do
         slots: 1,
         card_hp: 2,
         condition: :even
-      )
+      ),
+      weapon("wpn_stub_gun", "Stub Gun",
+        damage_base: 3,
+        damage_type: :kinetic,
+        slots: 1,
+        card_hp: 2,
+        condition: {:max, 2},
+        targeting: %{weapon: 20, armor: 15, battery: 15, chassis: 20, locomotion: 10, capacitor: 10, cpu: 10}
+      ),
+      weapon("wpn_plasma_arc", "Plasma Arc Generator",
+        damage_base: 0,
+        damage_type: :plasma,
+        slots: 1,
+        card_hp: 3,
+        dual_mode: %{condition: :odd, armor_type: :shield, shield_base: 1},
+        targeting: %{chassis: 30, weapon: 20, armor: 15, battery: 15, cpu: 10, capacitor: 5, locomotion: 5}
+      ),
+      weapon("wpn_feedback_loop", "Feedback Loop",
+        damage_base: 1,
+        damage_type: :energy,
+        slots: 1,
+        card_hp: 2,
+        dual_mode: %{condition: {:max, 2}, armor_type: :shield, shield_base: 2},
+        targeting: %{battery: 25, capacitor: 20, cpu: 15, weapon: 15, armor: 10, chassis: 10, locomotion: 5}
+      ),
+      capacitor("cap_overclocked", "Overclocked Capacitor", max_stored: 4, card_hp: 2),
+      battery("bat_micro_cell", "Micro Cell", dice_count: 1, die_sides: 4, max_activations: 8, card_hp: 1)
     ]
   end
 
@@ -290,16 +316,20 @@ defmodule Botgrade.Game.StarterDecks do
         %{id: "power_#{i}", condition: Keyword.get(opts, :condition), assigned_die: nil}
       end)
 
-    %Card{
-      id: id,
-      name: name,
-      type: :weapon,
-      properties: %{
+    properties =
+      %{
         damage_base: Keyword.fetch!(opts, :damage_base),
         damage_type: Keyword.fetch!(opts, :damage_type),
         card_hp: Keyword.get(opts, :card_hp, 3),
         targeting_profile: Keyword.get(opts, :targeting, nil)
-      },
+      }
+      |> maybe_put(:dual_mode, Keyword.get(opts, :dual_mode))
+
+    %Card{
+      id: id,
+      name: name,
+      type: :weapon,
+      properties: properties,
       dice_slots: slots
     }
   end
@@ -361,4 +391,7 @@ defmodule Botgrade.Game.StarterDecks do
       dice_slots: []
     }
   end
+
+  defp maybe_put(map, _key, nil), do: map
+  defp maybe_put(map, key, value), do: Map.put(map, key, value)
 end
