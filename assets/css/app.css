@@ -103,3 +103,65 @@
 [data-phx-session], [data-phx-teleported-src] { display: contents }
 
 /* This file is for your main application CSS */
+
+/* === Combat UI Animations === */
+
+/* Card dealing animation - plays when new cards enter the DOM */
+@keyframes card-deal {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Dice appearing in pool after battery activation */
+@keyframes dice-appear {
+  0% {
+    opacity: 0;
+    transform: rotate(-10deg) scale(0.5);
+  }
+  60% {
+    transform: rotate(3deg) scale(1.05);
+  }
+  100% {
+    opacity: 1;
+    transform: rotate(0deg) scale(1);
+  }
+}
+
+/* Victory/defeat screen entrance */
+@keyframes result-entrance {
+  0% {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  70% {
+    transform: scale(1.03);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Slot fill flash */
+@keyframes slot-filled {
+  0%, 100% {
+    box-shadow: none;
+  }
+  50% {
+    box-shadow: 0 0 8px oklch(60% 0.118 184.704 / 0.5);
+  }
+}
+
+/* Active button press feedback */
+.btn {
+  transition: transform 0.1s ease;
+}
+.btn:active {
+  transform: scale(0.96);
+}
