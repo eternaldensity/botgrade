@@ -102,8 +102,14 @@ defmodule Botgrade.Game.ScavengeLogic do
   end
 
   defp reset_card_state(card) do
+    # Capacitors retain their stored dice between fights
+    cleared_slots =
+      if card.type == :capacitor,
+        do: card.dice_slots,
+        else: Enum.map(card.dice_slots, &%{&1 | assigned_die: nil})
+
     card = %{card |
-      dice_slots: Enum.map(card.dice_slots, &%{&1 | assigned_die: nil}),
+      dice_slots: cleared_slots,
       last_result: nil
     }
 

@@ -185,18 +185,24 @@ defmodule BotgradeWeb.CombatComponents do
       not @interactable and not @destroyed and @phase == :power_up && "opacity-60"
     ]}>
       <%!-- Header: icon + name + type badge --%>
-      <div class="flex items-start justify-between gap-1">
+      <%!-- Single tag: show inline with title. Multiple tags: separate line. --%>
+      <div class={["flex items-start gap-1", @card.damage != :damaged && "justify-between"]}>
         <div class="flex items-center gap-1.5">
           <.icon name={card_type_icon(@card.type)} class={["size-4 shrink-0", card_icon_color(@card.type)]} />
           <span class="font-bold leading-tight">{@card.name}</span>
-        </div>
-        <div class="flex items-center gap-1 shrink-0">
-          <span :if={@card.damage == :damaged} class="badge badge-xs badge-warning">DMG</span>
-          <span :if={@destroyed} class="badge badge-xs badge-error">DEAD</span>
-          <span :if={not @destroyed} class={["badge badge-xs", card_badge(@card.type)]}>
+          <%!-- Single badge inline when not damaged --%>
+          <span :if={@destroyed and @card.damage != :damaged} class="badge badge-xs badge-error shrink-0">DEAD</span>
+          <span :if={not @destroyed and @card.damage != :damaged} class={["badge badge-xs shrink-0", card_badge(@card.type)]}>
             {card_type_label(@card.type)}
           </span>
         </div>
+      </div>
+      <div :if={@card.damage == :damaged} class="flex items-center gap-1">
+        <span class="badge badge-xs badge-warning">DMG</span>
+        <span :if={@destroyed} class="badge badge-xs badge-error">DEAD</span>
+        <span :if={not @destroyed} class={["badge badge-xs", card_badge(@card.type)]}>
+          {card_type_label(@card.type)}
+        </span>
       </div>
 
       <%!-- Card HP Bar --%>
