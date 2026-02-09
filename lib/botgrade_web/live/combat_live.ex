@@ -20,10 +20,17 @@ defmodule BotgradeWeb.CombatLive do
     {:ok,
      assign(socket,
        combat_id: combat_id,
+       campaign_id: nil,
        state: state,
        selected_die: nil,
        error_message: nil
      )}
+  end
+
+  @impl true
+  def handle_params(params, _uri, socket) do
+    campaign_id = params["campaign_id"] || socket.assigns.campaign_id
+    {:noreply, assign(socket, campaign_id: campaign_id)}
   end
 
   @impl true
@@ -106,6 +113,23 @@ defmodule BotgradeWeb.CombatLive do
   end
 
   @impl true
+  def handle_event("return_to_map", _params, socket) do
+    campaign_id = socket.assigns.campaign_id
+    player = socket.assigns.state.player
+    player_cards = player.installed ++ player.deck ++ player.hand ++ player.discard ++ player.in_play
+    result = socket.assigns.state.result
+
+    Botgrade.Campaign.CampaignServer.complete_combat(
+      campaign_id,
+      player_cards,
+      player.resources,
+      result
+    )
+
+    {:noreply, push_navigate(socket, to: ~p"/campaign/#{campaign_id}")}
+  end
+
+  @impl true
   def handle_event("next_combat", _params, socket) do
     player = socket.assigns.state.player
     player_cards = player.installed ++ player.deck ++ player.hand ++ player.discard ++ player.in_play
@@ -164,7 +188,7 @@ defmodule BotgradeWeb.CombatLive do
         <.scavenge_panel :if={@state.phase == :scavenging} state={@state} />
 
         <%!-- Victory/Defeat End Screen --%>
-        <.end_screen :if={@state.phase == :ended} result={@state.result} />
+        <.end_screen :if={@state.phase == :ended} result={@state.result} campaign_id={@campaign_id} />
 
         <%!-- Phase Controls --%>
         <.phase_controls phase={@state.phase} turn_number={@state.turn_number} result={@state.result} />

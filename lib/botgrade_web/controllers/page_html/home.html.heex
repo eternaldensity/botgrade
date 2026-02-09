@@ -5,6 +5,43 @@
     <p class="text-xl text-base-content/70 mb-8">
       A tactical robot card game. Build your deck from the wreckage of your enemies.
     </p>
+
+    <%!-- Campaign Section --%>
+    <div class="mb-8">
+      <form action="/campaign/start" method="post">
+        <input type="hidden" name="_csrf_token" value={Phoenix.Controller.get_csrf_token()} />
+        <button type="submit" class="btn btn-primary btn-lg w-full">
+          New Campaign
+        </button>
+      </form>
+
+      <%= if @saves != [] do %>
+        <div class="mt-4 space-y-2 text-left">
+          <p class="text-sm font-semibold text-base-content/80 text-center mb-2">Continue Campaign:</p>
+          <%= for save <- @saves do %>
+            <a
+              href={"/campaign/continue/#{save.id}"}
+              class="flex items-center justify-between p-3 rounded-lg border border-base-300 hover:border-primary cursor-pointer transition-colors"
+            >
+              <div>
+                <div class="font-semibold text-base-content text-sm">Campaign <%= save.id %></div>
+                <div class="text-xs text-base-content/50">
+                  <%= if save.updated_at do %>
+                    Last played: <%= save.updated_at |> String.slice(0, 16) |> String.replace("T", " ") %>
+                  <% end %>
+                </div>
+              </div>
+              <span class="btn btn-sm btn-ghost">Resume</span>
+            </a>
+          <% end %>
+        </div>
+      <% end %>
+    </div>
+
+    <%!-- Divider --%>
+    <div class="divider text-base-content/40 text-sm">or play a quick match</div>
+
+    <%!-- Quick Combat Section --%>
     <form action="/combat/start" method="post">
       <input type="hidden" name="_csrf_token" value={Phoenix.Controller.get_csrf_token()} />
 
@@ -27,8 +64,8 @@
         <% end %>
       </div>
 
-      <button type="submit" class="btn btn-primary btn-lg">
-        Start Combat
+      <button type="submit" class="btn btn-outline btn-lg">
+        Quick Combat
       </button>
     </form>
   </div>

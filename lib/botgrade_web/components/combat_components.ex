@@ -700,6 +700,7 @@ defmodule BotgradeWeb.CombatComponents do
   # --- End Screen ---
 
   attr(:result, :atom, required: true)
+  attr(:campaign_id, :string, default: nil)
 
   def end_screen(assigns) do
     ~H"""
@@ -716,11 +717,17 @@ defmodule BotgradeWeb.CombatComponents do
           {if @result == :player_wins, do: "Enemy robot destroyed.", else: "Your robot has been destroyed."}
         </p>
         <div class="card-actions justify-center mt-4 gap-2">
-          <button :if={@result == :player_wins} phx-click="next_combat" class="btn btn-primary">
+          <%!-- Campaign mode: Return to Map --%>
+          <button :if={@campaign_id} phx-click="return_to_map" class="btn btn-primary">
+            <.icon name="hero-map" class="size-4" />
+            Return to Map
+          </button>
+          <%!-- Standalone mode: Next Combat / New Game --%>
+          <button :if={@result == :player_wins and is_nil(@campaign_id)} phx-click="next_combat" class="btn btn-primary">
             <.icon name="hero-arrow-right" class="size-4" />
             Next Combat
           </button>
-          <button phx-click="new_combat" class="btn btn-outline">
+          <button :if={is_nil(@campaign_id)} phx-click="new_combat" class="btn btn-outline">
             <.icon name="hero-arrow-path" class="size-4" />
             New Game
           </button>

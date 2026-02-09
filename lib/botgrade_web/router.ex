@@ -19,6 +19,9 @@ defmodule BotgradeWeb.Router do
 
     get "/", PageController, :home
     post "/combat/start", PageController, :start_combat
+    post "/campaign/start", PageController, :start_campaign
+    get "/campaign/continue/:id", PageController, :continue_campaign
+    live "/campaign/:id", CampaignLive
     live "/combat/:id", CombatLive
   end
 

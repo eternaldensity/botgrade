@@ -12,6 +12,7 @@ defmodule Botgrade.Application do
       {DNSCluster, query: Application.get_env(:botgrade, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Botgrade.PubSub},
       Botgrade.Combat.CombatSupervisor,
+      Botgrade.Campaign.CampaignSupervisor,
       BotgradeWeb.Endpoint
     ]
 
