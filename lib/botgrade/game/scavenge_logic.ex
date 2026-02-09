@@ -46,7 +46,7 @@ defmodule Botgrade.Game.ScavengeLogic do
       end)
 
     player = state.player
-    all_player_cards = player.deck ++ player.hand ++ player.discard ++ player.in_play ++ taken_cards
+    all_player_cards = player.installed ++ player.deck ++ player.hand ++ player.discard ++ player.in_play ++ taken_cards
     updated_player = %{player | deck: all_player_cards, hand: [], discard: [], in_play: [], installed: []}
 
     log_msg =
