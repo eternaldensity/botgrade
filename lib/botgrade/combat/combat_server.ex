@@ -37,9 +37,10 @@ defmodule Botgrade.Combat.CombatServer do
     combat_id = Keyword.fetch!(opts, :combat_id)
     player_cards = Keyword.get(opts, :player_cards, StarterDecks.player_deck())
     enemy_cards = Keyword.get(opts, :enemy_cards, StarterDecks.enemy_deck())
+    player_resources = Keyword.get(opts, :player_resources, %{})
 
     state =
-      CombatLogic.new_combat(combat_id, player_cards, enemy_cards)
+      CombatLogic.new_combat(combat_id, player_cards, enemy_cards, player_resources)
       |> CombatLogic.draw_phase()
 
     {:ok, state}

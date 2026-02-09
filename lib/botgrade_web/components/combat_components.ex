@@ -56,6 +56,14 @@ defmodule BotgradeWeb.CombatComponents do
               <.icon name="hero-sparkles-mini" class="size-3.5" />
               {@robot.shield} shield
             </span>
+            <span
+              :for={{type, count} <- Enum.sort_by(@robot.resources, fn {k, _} -> Atom.to_string(k) end)}
+              :if={@position == :bottom and count > 0}
+              class="flex items-center gap-0.5 text-warning/80 font-semibold"
+            >
+              <span class="text-[10px]">{scrap_label(type)}</span>
+              <span class="font-mono">{count}</span>
+            </span>
           </div>
         </div>
         <div class="w-full bg-base-300 rounded-full h-3 overflow-hidden">
@@ -622,6 +630,24 @@ defmodule BotgradeWeb.CombatComponents do
           </span>
         </h3>
 
+        <div :if={map_size(@state.scavenge_scraps) > 0} class="bg-warning/10 border border-warning/30 rounded-xl p-3 mt-2">
+          <h4 class="text-sm font-bold flex items-center gap-1.5 mb-2">
+            <.icon name="hero-cog-6-tooth" class="size-4 text-warning" />
+            Scrap Recovered
+            <span class="text-xs font-normal text-base-content/60">(auto-collected)</span>
+          </h4>
+          <div class="flex flex-wrap gap-2">
+            <div
+              :for={{type, count} <- Enum.sort_by(@state.scavenge_scraps, fn {k, _} -> Atom.to_string(k) end)}
+              class="flex items-center gap-1.5 bg-base-100 rounded-lg px-2.5 py-1.5 border border-base-300"
+            >
+              <.icon name={scrap_icon(type)} class={["size-4", scrap_color(type)]} />
+              <span class="font-semibold text-sm">{scrap_label(type)}</span>
+              <span class="badge badge-sm badge-warning font-mono">x{count}</span>
+            </div>
+          </div>
+        </div>
+
         <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 mt-2">
           <div
             :for={card <- @state.scavenge_loot}
@@ -823,4 +849,24 @@ defmodule BotgradeWeb.CombatComponents do
   end
 
   defp card_interactable?(_card, _phase), do: false
+
+  # --- Scrap Helpers ---
+
+  defp scrap_icon(:metal), do: "hero-cube-transparent"
+  defp scrap_icon(:wire), do: "hero-link"
+  defp scrap_icon(:plastic), do: "hero-square-3-stack-3d"
+  defp scrap_icon(:grease), do: "hero-beaker"
+  defp scrap_icon(:chips), do: "hero-cpu-chip"
+
+  defp scrap_color(:metal), do: "text-base-content/70"
+  defp scrap_color(:wire), do: "text-amber-500"
+  defp scrap_color(:plastic), do: "text-blue-400"
+  defp scrap_color(:grease), do: "text-yellow-600"
+  defp scrap_color(:chips), do: "text-emerald-500"
+
+  defp scrap_label(:metal), do: "Metal"
+  defp scrap_label(:wire), do: "Wire"
+  defp scrap_label(:plastic), do: "Plastic"
+  defp scrap_label(:grease), do: "Grease"
+  defp scrap_label(:chips), do: "Chips"
 end

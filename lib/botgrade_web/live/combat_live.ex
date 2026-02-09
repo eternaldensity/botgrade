@@ -110,7 +110,7 @@ defmodule BotgradeWeb.CombatLive do
     player = socket.assigns.state.player
     player_cards = player.installed ++ player.deck ++ player.hand ++ player.discard ++ player.in_play
     combat_id = Base.encode16(:crypto.strong_rand_bytes(4), case: :lower)
-    {:ok, _pid} = CombatSupervisor.start_combat(combat_id, player_cards: player_cards)
+    {:ok, _pid} = CombatSupervisor.start_combat(combat_id, player_cards: player_cards, player_resources: player.resources)
     {:noreply, push_navigate(socket, to: ~p"/combat/#{combat_id}")}
   end
 

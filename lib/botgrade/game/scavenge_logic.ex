@@ -1,22 +1,40 @@
 defmodule Botgrade.Game.ScavengeLogic do
-  alias Botgrade.Game.{CombatState, Card}
+  alias Botgrade.Game.{CombatState, Card, ScrapLogic}
 
   @scavenge_limit 3
 
   @spec begin_scavenge(CombatState.t()) :: CombatState.t()
   def begin_scavenge(%CombatState{result: :player_wins} = state) do
     enemy = state.enemy
-    all_cards = enemy.installed ++ enemy.deck ++ enemy.hand ++ enemy.discard ++ enemy.in_play
+    player = state.player
+
+    all_enemy_cards = enemy.installed ++ enemy.deck ++ enemy.hand ++ enemy.discard ++ enemy.in_play
+    all_player_cards = player.installed ++ player.deck ++ player.hand ++ player.discard ++ player.in_play
+
+    # Generate scrap from destroyed cards on BOTH sides (before salvage degradation)
+    scraps = ScrapLogic.generate_scrap_from_cards(all_enemy_cards ++ all_player_cards)
 
     # Cards already have combat damage state; apply light salvage degradation
     loot =
-      all_cards
+      all_enemy_cards
       |> Enum.map(&apply_scavenge_degradation/1)
       |> Enum.reject(&(&1.damage == :destroyed))
       |> Enum.map(&reset_card_state/1)
 
-    %{state | phase: :scavenging, scavenge_loot: loot, scavenge_selected: [], scavenge_limit: @scavenge_limit}
+    scrap_msg =
+      if map_size(scraps) > 0,
+        do: "Scrap recovered: #{ScrapLogic.format_resources(scraps)}",
+        else: "No usable scrap found in the wreckage."
+
+    %{state |
+      phase: :scavenging,
+      scavenge_loot: loot,
+      scavenge_selected: [],
+      scavenge_limit: @scavenge_limit,
+      scavenge_scraps: scraps
+    }
     |> add_log("Scavenging enemy wreckage... (pick up to #{@scavenge_limit} cards)")
+    |> add_log(scrap_msg)
   end
 
   @spec toggle_card(CombatState.t(), String.t()) :: {:ok, CombatState.t()} | {:error, String.t()}
@@ -47,7 +65,8 @@ defmodule Botgrade.Game.ScavengeLogic do
 
     player = state.player
     all_player_cards = player.installed ++ player.deck ++ player.hand ++ player.discard ++ player.in_play ++ taken_cards
-    updated_player = %{player | deck: all_player_cards, hand: [], discard: [], in_play: [], installed: []}
+    merged_resources = ScrapLogic.merge_resources(player.resources, state.scavenge_scraps)
+    updated_player = %{player | deck: all_player_cards, hand: [], discard: [], in_play: [], installed: [], resources: merged_resources}
 
     log_msg =
       if taken_cards == [],

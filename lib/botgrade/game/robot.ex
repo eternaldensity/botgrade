@@ -11,7 +11,8 @@ defmodule Botgrade.Game.Robot do
           installed: [Card.t()],
           available_dice: [map()],
           shield: non_neg_integer(),
-          plating: non_neg_integer()
+          plating: non_neg_integer(),
+          resources: map()
         }
 
   @enforce_keys [:id, :name]
@@ -25,7 +26,8 @@ defmodule Botgrade.Game.Robot do
     installed: [],
     available_dice: [],
     shield: 0,
-    plating: 0
+    plating: 0,
+    resources: %{}
   ]
 
   @installed_types [:chassis, :cpu, :locomotion]

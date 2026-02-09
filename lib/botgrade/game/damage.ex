@@ -39,7 +39,12 @@ defmodule Botgrade.Game.Damage do
 
     # Apply damage to target card
     new_hp = max(0, target_card.current_hp - card_damage)
-    updated_card = %{target_card | current_hp: new_hp} |> Card.sync_damage_state()
+    overkill = max(0, card_damage - target_card.current_hp)
+
+    updated_card =
+      %{target_card | current_hp: new_hp}
+      |> Card.sync_damage_state()
+      |> maybe_store_overkill(overkill)
 
     # Update defender's defense pools
     updated_defender = %{defender | plating: new_plating, shield: new_shield}
@@ -64,6 +69,12 @@ defmodule Botgrade.Game.Damage do
   end
 
   defp absorb(damage, pool, _eff), do: {damage, 0, pool}
+
+  defp maybe_store_overkill(%Card{damage: :destroyed} = card, overkill) when overkill > 0 do
+    %{card | properties: Map.put(card.properties, :overkill, overkill)}
+  end
+
+  defp maybe_store_overkill(card, _overkill), do: card
 
   defp build_absorb_msg(plating_absorbed, shield_absorbed) do
     parts =

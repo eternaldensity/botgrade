@@ -6,11 +6,13 @@ defmodule Botgrade.Game.CombatLogic do
 
   # --- Initialization ---
 
-  @spec new_combat(String.t(), [Card.t()], [Card.t()]) :: CombatState.t()
-  def new_combat(combat_id, player_cards, enemy_cards) do
+  @spec new_combat(String.t(), [Card.t()], [Card.t()], map()) :: CombatState.t()
+  def new_combat(combat_id, player_cards, enemy_cards, player_resources \\ %{}) do
+    player = Robot.new("player", "Player", player_cards)
+
     %CombatState{
       id: combat_id,
-      player: Robot.new("player", "Player", player_cards),
+      player: %{player | resources: player_resources},
       enemy: Robot.new("enemy", "Enemy", enemy_cards),
       phase: :draw,
       turn_number: 1,
