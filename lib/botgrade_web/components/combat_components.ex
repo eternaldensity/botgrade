@@ -718,12 +718,12 @@ defmodule BotgradeWeb.CombatComponents do
         </p>
         <div class="card-actions justify-center mt-4 gap-2">
           <%!-- Campaign victory: Return to Map --%>
-          <button :if={@campaign_id and @result == :player_wins} phx-click="return_to_map" class="btn btn-primary">
+          <button :if={not is_nil(@campaign_id) and @result == :player_wins} phx-click="return_to_map" class="btn btn-primary">
             <.icon name="hero-map" class="size-4" />
             Return to Map
           </button>
           <%!-- Campaign defeat: Campaign Over --%>
-          <button :if={@campaign_id and @result == :enemy_wins} phx-click="campaign_over" class="btn btn-error">
+          <button :if={not is_nil(@campaign_id) and @result == :enemy_wins} phx-click="campaign_over" class="btn btn-error">
             <.icon name="hero-x-mark" class="size-4" />
             Campaign Over
           </button>
