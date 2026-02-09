@@ -131,6 +131,9 @@ defmodule Botgrade.Game.CombatLogic do
           Map.get(card.properties, :activated_this_turn, false) ->
             {:error, "CPU already activated this turn."}
 
+          not cpu_has_power?(state.player, card) ->
+            {:error, "Not enough batteries to power this CPU."}
+
           true ->
             activate_cpu_by_type(state, card)
         end
@@ -164,8 +167,12 @@ defmodule Botgrade.Game.CombatLogic do
         end
 
       :target_lock ->
-        state = execute_cpu_ability(state, card, ability, :player, nil)
-        {:ok, state}
+        if not meets_ability_requirements?(state.player, ability) do
+          {:error, "Requires #{ability.requires_card_name} in hand."}
+        else
+          state = execute_cpu_ability(state, card, ability, :player, nil)
+          {:ok, state}
+        end
 
       :overclock_battery ->
         if not has_valid_overclock_target?(state.player) do
@@ -188,6 +195,28 @@ defmodule Botgrade.Game.CombatLogic do
         end
     end
   end
+
+  defp cpu_has_power?(robot, cpu_card) do
+    battery_count =
+      Enum.count(robot.hand, fn card ->
+        card.type == :battery and card.damage != :destroyed
+      end)
+
+    powered_cpus =
+      robot.installed
+      |> Enum.filter(fn card -> card.type == :cpu and card.damage != :destroyed end)
+      |> Enum.take(battery_count)
+
+    Enum.any?(powered_cpus, &(&1.id == cpu_card.id))
+  end
+
+  defp meets_ability_requirements?(robot, %{requires_card_name: name}) do
+    Enum.any?(robot.hand, fn card ->
+      card.name == name and card.damage != :destroyed
+    end)
+  end
+
+  defp meets_ability_requirements?(_robot, _ability), do: true
 
   defp has_valid_armor_target?(robot) do
     Enum.any?(robot.hand, fn card ->
@@ -1251,6 +1280,7 @@ defmodule Botgrade.Game.CombatLogic do
           not Map.get(card.properties, :activated_this_turn, false) and
           Map.has_key?(card.properties, :cpu_ability)
       end)
+      |> Enum.filter(&cpu_has_power?(state.enemy, &1))
 
     cpus =
       case phase do
@@ -1312,7 +1342,7 @@ defmodule Botgrade.Game.CombatLogic do
     has_weapons =
       Enum.any?(state.enemy.hand, &(&1.type == :weapon and &1.damage != :destroyed))
 
-    if has_weapons do
+    if has_weapons and meets_ability_requirements?(state.enemy, ability) do
       execute_cpu_ability(state, cpu_card, ability, :enemy, nil)
     else
       state

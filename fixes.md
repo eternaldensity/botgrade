@@ -1,9 +1,9 @@
 # balance fixes
 
-* strikebolt cpu ability to require strikebolt cell in hand
+* ~~strikebolt cpu ability to require strikebolt cell in hand~~ (requires_card_name field on cpu_ability, validated in activate_cpu_by_type + AI)
 * ~~prevent reuse of items via activations per turn (usually 1)~~ (all card types use activated_this_turn flag, in_play zone removed)
 * ~~prevent discard of cards that have been used this turn~~ (blocked in toggle_cpu_discard + AI logic)
-* number of active CPUs limited by number of batteries. (if you have 3 batteries and 5 CPUs the newest 2 can't be activated)
+* ~~number of active CPUs limited by number of batteries. (if you have 3 batteries and 5 CPUs the newest 2 can't be activated)~~ (cpu_has_power? checks battery count vs CPU position in installed list)
 
 # UI improvements
 * animate the enemy's turn, showing damage as it's dealt to your components like it does for their damge to yours

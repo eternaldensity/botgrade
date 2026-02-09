@@ -64,7 +64,8 @@ defmodule Botgrade.Game.CardSerializer do
     %{
       "type" => to_string(ability.type),
       "discard_count" => ability[:discard_count],
-      "draw_count" => ability[:draw_count]
+      "draw_count" => ability[:draw_count],
+      "requires_card_name" => ability[:requires_card_name]
     }
   end
 
@@ -99,11 +100,15 @@ defmodule Botgrade.Game.CardSerializer do
   defp deserialize_prop_value("cpu_ability", nil), do: nil
 
   defp deserialize_prop_value("cpu_ability", ability) do
-    %{
+    base = %{
       type: String.to_atom(ability["type"]),
       discard_count: ability["discard_count"],
       draw_count: ability["draw_count"]
     }
+
+    if ability["requires_card_name"],
+      do: Map.put(base, :requires_card_name, ability["requires_card_name"]),
+      else: base
   end
 
   defp deserialize_prop_value(_key, v), do: v

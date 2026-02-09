@@ -149,7 +149,7 @@ defmodule Botgrade.Game.StarterDecks do
       ),
       chassis("e_chs_1", "Strikebolt Frame", card_hp: 3),
       chassis("e_chs_2", "Light Frame", card_hp: 2),
-      cpu("e_cpu_1", "Strikebolt CPU", card_hp: 2, cpu_ability: %{type: :target_lock}),
+      cpu("e_cpu_1", "Strikebolt CPU", card_hp: 2, cpu_ability: %{type: :target_lock, requires_card_name: "Strikebolt Cell"}),
       locomotion("e_loc_1", "Sprint Jets", speed_base: 3, card_hp: 1)
     ]
   end
