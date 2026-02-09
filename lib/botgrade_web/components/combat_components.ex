@@ -193,7 +193,7 @@ defmodule BotgradeWeb.CombatComponents do
         <div class="flex items-center gap-1 shrink-0">
           <span :if={@card.damage == :damaged} class="badge badge-xs badge-warning">DMG</span>
           <span :if={@destroyed} class="badge badge-xs badge-error">DEAD</span>
-          <span class={["badge badge-xs", card_badge(@card.type)]}>
+          <span :if={not @destroyed} class={["badge badge-xs", card_badge(@card.type)]}>
             {card_type_label(@card.type)}
           </span>
         </div>

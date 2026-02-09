@@ -135,7 +135,7 @@ defmodule BotgradeWeb.CombatLive do
     ~H"""
     <div class="min-h-screen bg-base-200 flex flex-col">
       <%!-- Enemy Status (sticky top) --%>
-      <.robot_status_bar robot={@state.enemy} label="ENEMY" position={:top} />
+      <.robot_status_bar :if={@state.phase not in [:ended, :scavenging]} robot={@state.enemy} label="ENEMY" position={:top} />
 
       <%!-- Enemy Board --%>
       <.enemy_board
@@ -200,7 +200,7 @@ defmodule BotgradeWeb.CombatLive do
       </div>
 
       <%!-- Player Status (sticky bottom) --%>
-      <.robot_status_bar robot={@state.player} label="YOU" position={:bottom} />
+      <.robot_status_bar :if={@state.phase not in [:ended, :scavenging]} robot={@state.player} label="YOU" position={:bottom} />
     </div>
     """
   end
