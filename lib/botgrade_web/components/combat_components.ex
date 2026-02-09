@@ -947,7 +947,9 @@ defmodule BotgradeWeb.CombatComponents do
   defp cpu_ability_label(%{type: :siphon_power}), do: "Siphon Power"
   defp cpu_ability_label(_), do: "Processing Unit"
 
-  defp card_matches_targeting_mode?(_card, :select_hand_cards), do: true
+  defp card_matches_targeting_mode?(card, :select_hand_cards) do
+    not Map.get(card.properties, :activated_this_turn, false)
+  end
 
   defp card_matches_targeting_mode?(card, :select_installed_card) do
     card.type in [:armor, :battery]

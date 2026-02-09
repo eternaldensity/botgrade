@@ -223,7 +223,13 @@ defmodule Botgrade.Game.CombatLogic do
         {:error, "Already selected #{max_select} cards."}
 
       find_card_in_hand(state.player, card_id) != nil ->
-        {:ok, %{state | cpu_discard_selected: state.cpu_discard_selected ++ [card_id]}}
+        card = find_card_in_hand(state.player, card_id)
+
+        if card_used_this_turn?(card) do
+          {:error, "Cannot discard a card that was used this turn."}
+        else
+          {:ok, %{state | cpu_discard_selected: state.cpu_discard_selected ++ [card_id]}}
+        end
 
       true ->
         {:error, "Card not found in hand."}
@@ -1023,12 +1029,17 @@ defmodule Botgrade.Game.CombatLogic do
 
   defp reset_cpu_flag(card), do: card
 
+  defp card_used_this_turn?(card) do
+    Map.get(card.properties, :activated_this_turn, false)
+  end
+
   defp find_installed_card(robot, card_id) do
     Enum.find(robot.installed, &(&1.id == card_id))
   end
 
   defp has_enough_hand_cards?(robot, %{discard_count: n}) do
-    length(robot.hand) >= n
+    discardable = Enum.reject(robot.hand, &card_used_this_turn?/1)
+    length(discardable) >= n
   end
 
   defp execute_cpu_ability(state, cpu_card, %{type: :discard_draw} = ability, who, selected_ids) do
@@ -1270,10 +1281,13 @@ defmodule Botgrade.Game.CombatLogic do
   defp ai_execute_cpu_ability(state, cpu_card, %{type: :discard_draw} = ability) do
     enemy = state.enemy
 
-    if length(enemy.hand) >= ability.discard_count do
+    # Exclude cards used this turn from discard candidates
+    discardable = Enum.reject(enemy.hand, &card_used_this_turn?/1)
+
+    if length(discardable) >= ability.discard_count do
       # AI picks worst cards: destroyed > depleted batteries > damaged > others
       sorted_hand =
-        Enum.sort_by(enemy.hand, fn card ->
+        Enum.sort_by(discardable, fn card ->
           cond do
             card.damage == :destroyed -> 0
             card.type == :battery and card.properties.remaining_activations <= 0 -> 1

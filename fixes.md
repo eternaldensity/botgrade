@@ -1,8 +1,8 @@
 # balance fixes
 
 * strikebolt cpu ability to require strikebolt cell in hand
-* prevent reuse of items via activations per turn (usually 1)
-* prevent discard of cards that have been used this turn
+* ~~prevent reuse of items via activations per turn (usually 1)~~ (batteries already have activated_this_turn; weapons/armor move to in_play)
+* ~~prevent discard of cards that have been used this turn~~ (blocked in toggle_cpu_discard + AI logic)
 * number of active CPUs limited by number of batteries. (if you have 3 batteries and 5 CPUs the newest 2 can't be activated)
 
 # UI improvements
