@@ -64,7 +64,10 @@ defmodule Botgrade.Game.ScavengeLogic do
       end)
 
     player = state.player
-    all_player_cards = player.installed ++ player.deck ++ player.hand ++ player.discard ++ player.in_play ++ taken_cards
+
+    all_player_cards =
+      (player.installed ++ player.deck ++ player.hand ++ player.discard ++ player.in_play ++ taken_cards)
+      |> Enum.reject(&(&1.damage == :destroyed))
     merged_resources = ScrapLogic.merge_resources(player.resources, state.scavenge_scraps)
     updated_player = %{player | deck: all_player_cards, hand: [], discard: [], in_play: [], installed: [], resources: merged_resources}
 
