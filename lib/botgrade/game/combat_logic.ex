@@ -238,9 +238,15 @@ defmodule Botgrade.Game.CombatLogic do
     log_msg =
       "#{who_name} fires #{weapon.name} for #{total_damage} damage#{penalty_msg}.#{absorb_msg}"
 
-    # Move card to in_play with cleared slots
-    cleared_card = clear_card_slots(weapon)
-    attacker = move_card_to_in_play(attacker, weapon.id, cleared_card)
+    # Store result on card, then clear slots and move to in_play
+    dice_used = Enum.map(weapon.dice_slots, & &1.assigned_die) |> Enum.reject(&is_nil/1)
+
+    result_card =
+      weapon
+      |> clear_card_slots()
+      |> Map.put(:last_result, %{type: :damage, value: total_damage, dice: dice_used})
+
+    attacker = move_card_to_in_play(attacker, weapon.id, result_card)
 
     state = put_combatants(state, who, attacker, defender)
     add_log(state, log_msg)
@@ -275,9 +281,16 @@ defmodule Botgrade.Game.CombatLogic do
           {combatant, "#{who_name} activates #{armor.name}: +#{value} shield#{penalty_msg}."}
       end
 
-    # Move card to in_play with cleared slots
-    cleared_card = clear_card_slots(armor)
-    combatant = move_card_to_in_play(combatant, armor.id, cleared_card)
+    # Store result on card, then clear slots and move to in_play
+    dice_used = Enum.map(armor.dice_slots, & &1.assigned_die) |> Enum.reject(&is_nil/1)
+    result_type = armor.properties.armor_type
+
+    result_card =
+      armor
+      |> clear_card_slots()
+      |> Map.put(:last_result, %{type: result_type, value: value, dice: dice_used})
+
+    combatant = move_card_to_in_play(combatant, armor.id, result_card)
 
     state =
       if who == :player,

@@ -24,7 +24,7 @@ defmodule Botgrade.Game.Card do
         }
 
   @enforce_keys [:id, :name, :type]
-  defstruct [:id, :name, :type, damage: :intact, properties: %{}, dice_slots: []]
+  defstruct [:id, :name, :type, damage: :intact, properties: %{}, dice_slots: [], last_result: nil]
 
   @spec meets_condition?(dice_condition() | nil, pos_integer()) :: boolean()
   def meets_condition?(nil, _value), do: true

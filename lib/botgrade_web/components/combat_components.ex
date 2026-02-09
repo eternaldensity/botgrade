@@ -208,6 +208,27 @@ defmodule BotgradeWeb.CombatComponents do
         Activate
       </button>
 
+      <%!-- Activation Result (shown on in-play cards) --%>
+      <div :if={@card.last_result} class="flex items-center gap-1.5 text-xs border-t border-base-300/50 pt-1.5 -mb-0.5">
+        <div class="flex gap-0.5">
+          <span
+            :for={die <- @card.last_result.dice}
+            class="w-5 h-5 rounded bg-base-300 flex items-center justify-center font-mono font-bold text-[11px]"
+          >
+            {die.value}
+          </span>
+        </div>
+        <span class="text-base-content/40">=</span>
+        <span class={[
+          "font-mono font-bold",
+          @card.last_result.type == :damage && "text-error",
+          @card.last_result.type == :plating && "text-primary",
+          @card.last_result.type == :shield && "text-info"
+        ]}>
+          {result_label(@card.last_result)}
+        </span>
+      </div>
+
       <%!-- Damage indicator strip --%>
       <div :if={@card.damage == :damaged} class="text-xs text-warning flex items-center gap-1 -mb-1">
         <.icon name="hero-exclamation-triangle-mini" class="size-3.5" />
@@ -582,6 +603,10 @@ defmodule BotgradeWeb.CombatComponents do
   defp condition_label(:even), do: "even"
   defp condition_label(:odd), do: "odd"
   defp condition_label(nil), do: ""
+
+  defp result_label(%{type: :damage, value: v}), do: "#{v} dmg"
+  defp result_label(%{type: :plating, value: v}), do: "+#{v} plating"
+  defp result_label(%{type: :shield, value: v}), do: "+#{v} shield"
 
   defp hp_bar_color(current, total) when current > total * 0.5, do: "bg-success"
   defp hp_bar_color(current, total) when current > total * 0.25, do: "bg-warning"
