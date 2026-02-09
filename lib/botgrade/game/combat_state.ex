@@ -34,6 +34,7 @@ defmodule Botgrade.Game.CombatState do
     result: :ongoing,
     scavenge_loot: [],
     scavenge_selected: [],
-    scavenge_limit: 3
+    scavenge_limit: 3,
+    last_attack_result: nil
   ]
 end

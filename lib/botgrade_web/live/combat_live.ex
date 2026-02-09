@@ -107,7 +107,8 @@ defmodule BotgradeWeb.CombatLive do
 
   @impl true
   def handle_event("next_combat", _params, socket) do
-    player_cards = socket.assigns.state.player.deck
+    player = socket.assigns.state.player
+    player_cards = player.installed ++ player.deck ++ player.hand ++ player.discard ++ player.in_play
     combat_id = Base.encode16(:crypto.strong_rand_bytes(4), case: :lower)
     {:ok, _pid} = CombatSupervisor.start_combat(combat_id, player_cards: player_cards)
     {:noreply, push_navigate(socket, to: ~p"/combat/#{combat_id}")}
@@ -135,6 +136,13 @@ defmodule BotgradeWeb.CombatLive do
     <div class="min-h-screen bg-base-200 flex flex-col">
       <%!-- Enemy Status (sticky top) --%>
       <.robot_status_bar robot={@state.enemy} label="ENEMY" position={:top} />
+
+      <%!-- Enemy Board --%>
+      <.enemy_board
+        :if={@state.result == :ongoing}
+        robot={@state.enemy}
+        last_attack_result={@state.last_attack_result}
+      />
 
       <%!-- Main Content --%>
       <div class="flex-1 max-w-5xl w-full mx-auto p-4 space-y-3">
@@ -170,6 +178,13 @@ defmodule BotgradeWeb.CombatLive do
           available_dice={@state.player.available_dice}
           selected_die={@selected_die}
           phase={@state.phase}
+        />
+
+        <%!-- Player Installed Components --%>
+        <.installed_components
+          :if={@state.result == :ongoing}
+          cards={@state.player.installed}
+          last_attack_result={@state.last_attack_result}
         />
 
         <%!-- Player Hand --%>

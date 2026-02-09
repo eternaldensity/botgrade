@@ -6,13 +6,12 @@ defmodule Botgrade.Game.ScavengeLogic do
   @spec begin_scavenge(CombatState.t()) :: CombatState.t()
   def begin_scavenge(%CombatState{result: :player_wins} = state) do
     enemy = state.enemy
-    all_cards = enemy.deck ++ enemy.hand ++ enemy.discard ++ enemy.in_play
+    all_cards = enemy.installed ++ enemy.deck ++ enemy.hand ++ enemy.discard ++ enemy.in_play
 
-    damage_ratio = 1.0 - enemy.current_hp / max(enemy.total_hp, 1)
-
+    # Cards already have combat damage state; apply light salvage degradation
     loot =
       all_cards
-      |> Enum.map(&apply_scavenge_damage(&1, damage_ratio))
+      |> Enum.map(&apply_scavenge_degradation/1)
       |> Enum.reject(&(&1.damage == :destroyed))
       |> Enum.map(&reset_card_state/1)
 
@@ -48,7 +47,7 @@ defmodule Botgrade.Game.ScavengeLogic do
 
     player = state.player
     all_player_cards = player.deck ++ player.hand ++ player.discard ++ player.in_play ++ taken_cards
-    updated_player = %{player | deck: all_player_cards, hand: [], discard: [], in_play: []}
+    updated_player = %{player | deck: all_player_cards, hand: [], discard: [], in_play: [], installed: []}
 
     log_msg =
       if taken_cards == [],
@@ -61,24 +60,36 @@ defmodule Botgrade.Game.ScavengeLogic do
 
   # --- Private ---
 
-  defp apply_scavenge_damage(%Card{damage: :destroyed} = card, _ratio), do: card
+  # Lighter post-combat degradation since cards already took damage during combat
+  defp apply_scavenge_degradation(%Card{damage: :destroyed} = card), do: card
 
-  defp apply_scavenge_damage(%Card{damage: :damaged} = card, ratio) do
-    if :rand.uniform() < ratio * 0.5, do: %{card | damage: :destroyed}, else: card
+  defp apply_scavenge_degradation(%Card{damage: :damaged} = card) do
+    # 20% chance damaged cards break during salvage
+    if :rand.uniform() < 0.2, do: %{card | damage: :destroyed, current_hp: 0}, else: card
   end
 
-  defp apply_scavenge_damage(%Card{} = card, ratio) do
-    roll = :rand.uniform()
-
-    cond do
-      roll < ratio * 0.3 -> %{card | damage: :destroyed}
-      roll < ratio -> %{card | damage: :damaged}
-      true -> card
+  defp apply_scavenge_degradation(%Card{} = card) do
+    # 10% chance intact cards get damaged during salvage
+    if :rand.uniform() < 0.1 do
+      max_hp = Map.get(card.properties, :card_hp, 2)
+      %{card | damage: :damaged, current_hp: div(max_hp, 2)}
+    else
+      card
     end
   end
 
   defp reset_card_state(card) do
     card = %{card | dice_slots: Enum.map(card.dice_slots, &%{&1 | assigned_die: nil})}
+
+    # Set current_hp to match damage state
+    max_hp = Map.get(card.properties, :card_hp, 2)
+
+    card =
+      case card.damage do
+        :intact -> %{card | current_hp: max_hp}
+        :damaged -> %{card | current_hp: div(max_hp, 2)}
+        :destroyed -> %{card | current_hp: 0}
+      end
 
     case card.type do
       :battery ->

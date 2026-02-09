@@ -5,7 +5,7 @@ defmodule BotgradeWeb.CombatComponents do
   use Phoenix.Component
   import BotgradeWeb.CoreComponents, only: [icon: 1]
 
-  alias Botgrade.Game.Card
+  alias Botgrade.Game.{Card, Robot}
 
   # --- Robot Status Bar ---
 
@@ -14,15 +14,20 @@ defmodule BotgradeWeb.CombatComponents do
   attr(:position, :atom, default: :top)
 
   def robot_status_bar(assigns) do
+    total_hp = Robot.total_hp(assigns.robot)
+    current_hp = Robot.current_hp(assigns.robot)
+
     hp_pct =
-      if assigns.robot.total_hp > 0,
-        do: assigns.robot.current_hp / assigns.robot.total_hp * 100,
+      if total_hp > 0,
+        do: current_hp / total_hp * 100,
         else: 0
 
     assigns =
       assigns
+      |> assign(:total_hp, total_hp)
+      |> assign(:current_hp, current_hp)
       |> assign(:hp_pct, hp_pct)
-      |> assign(:hp_bar_color, hp_bar_color(assigns.robot.current_hp, assigns.robot.total_hp))
+      |> assign(:hp_bar_color, hp_bar_color(current_hp, total_hp))
 
     ~H"""
     <div class={[
@@ -41,7 +46,7 @@ defmodule BotgradeWeb.CombatComponents do
 
       <div class="flex-1">
         <div class="flex justify-between text-xs mb-1">
-          <span class="font-mono">{@robot.current_hp}/{@robot.total_hp} HP</span>
+          <span class="font-mono">{@current_hp}/{@total_hp} HP</span>
           <div class="flex items-center gap-2">
             <span :if={@robot.plating > 0} class="flex items-center gap-1 text-primary font-semibold">
               <.icon name="hero-shield-check-mini" class="size-3.5" />
@@ -155,16 +160,21 @@ defmodule BotgradeWeb.CombatComponents do
 
   def game_card(assigns) do
     interactable = card_interactable?(assigns.card, assigns.phase)
+    destroyed = assigns.card.damage == :destroyed
 
-    assigns = assign(assigns, :interactable, interactable)
+    assigns =
+      assigns
+      |> assign(:interactable, interactable)
+      |> assign(:destroyed, destroyed)
 
     ~H"""
     <div class={[
       "rounded-xl border-2 p-3 text-sm flex flex-col gap-2 min-w-[160px] transition-all",
       card_bg(@card.type),
       card_border(@card.type),
+      @destroyed && "opacity-30 grayscale",
       @interactable && "ring-2 ring-primary/40 shadow-lg cursor-pointer",
-      not @interactable and @phase == :power_up && "opacity-60"
+      not @interactable and not @destroyed and @phase == :power_up && "opacity-60"
     ]}>
       <%!-- Header: icon + name + type badge --%>
       <div class="flex items-start justify-between gap-1">
@@ -174,19 +184,23 @@ defmodule BotgradeWeb.CombatComponents do
         </div>
         <div class="flex items-center gap-1 shrink-0">
           <span :if={@card.damage == :damaged} class="badge badge-xs badge-warning">DMG</span>
+          <span :if={@destroyed} class="badge badge-xs badge-error">DEAD</span>
           <span class={["badge badge-xs", card_badge(@card.type)]}>
             {card_type_label(@card.type)}
           </span>
         </div>
       </div>
 
+      <%!-- Card HP Bar --%>
+      <.card_hp_bar :if={@card.current_hp != nil and not @destroyed} card={@card} />
+
       <%!-- Stats --%>
-      <div class="text-base-content/70">
+      <div :if={not @destroyed} class="text-base-content/70">
         <.card_stats card={@card} />
       </div>
 
       <%!-- Dice Slots --%>
-      <div :if={@card.dice_slots != []} class="flex flex-wrap gap-1.5">
+      <div :if={@card.dice_slots != [] and not @destroyed} class="flex flex-wrap gap-1.5">
         <.dice_slot
           :for={slot <- @card.dice_slots}
           slot={slot}
@@ -199,7 +213,7 @@ defmodule BotgradeWeb.CombatComponents do
 
       <%!-- Battery Activation Button --%>
       <button
-        :if={@card.type == :battery and @phase == :power_up and @card.properties.remaining_activations > 0 and not Map.get(@card.properties, :activated_this_turn, false)}
+        :if={@card.type == :battery and @phase == :power_up and not @destroyed and @card.properties.remaining_activations > 0 and not Map.get(@card.properties, :activated_this_turn, false)}
         phx-click="activate_battery"
         phx-value-card-id={@card.id}
         class="btn btn-sm btn-primary w-full"
@@ -234,6 +248,172 @@ defmodule BotgradeWeb.CombatComponents do
         <.icon name="hero-exclamation-triangle-mini" class="size-3.5" />
         Damaged
       </div>
+    </div>
+    """
+  end
+
+  # --- Card HP Bar ---
+
+  attr(:card, :map, required: true)
+
+  defp card_hp_bar(assigns) do
+    max_hp = Map.get(assigns.card.properties, :card_hp, 2)
+    current_hp = assigns.card.current_hp || 0
+    hp_pct = if max_hp > 0, do: current_hp / max_hp * 100, else: 0
+
+    assigns =
+      assigns
+      |> assign(:max_hp, max_hp)
+      |> assign(:hp_pct, hp_pct)
+
+    ~H"""
+    <div class="flex items-center gap-1.5">
+      <div class="flex-1 bg-base-300 rounded-full h-1.5 overflow-hidden">
+        <div
+          class={["h-full rounded-full transition-all", hp_bar_color(@card.current_hp, @max_hp)]}
+          style={"width: #{@hp_pct}%"}
+        />
+      </div>
+      <span class="text-[10px] font-mono text-base-content/50 shrink-0">
+        {@card.current_hp}/{@max_hp}
+      </span>
+    </div>
+    """
+  end
+
+  # --- Enemy Board ---
+
+  attr(:robot, :map, required: true)
+  attr(:last_attack_result, :map, default: nil)
+
+  def enemy_board(assigns) do
+    cards = assigns.robot.installed ++ assigns.robot.in_play ++ assigns.robot.hand
+    assigns = assign(assigns, :cards, cards)
+
+    ~H"""
+    <div class="card bg-base-100 shadow-sm border border-error/20">
+      <div class="card-body p-3">
+        <h3 class="card-title text-sm text-error">
+          <.icon name="hero-cpu-chip" class="size-4" />
+          Enemy Components
+          <span class="badge badge-sm badge-ghost">{length(@cards)}</span>
+        </h3>
+        <div class="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+          <.enemy_card
+            :for={card <- @cards}
+            card={card}
+            hit={@last_attack_result != nil and @last_attack_result.target == card.id}
+          />
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  # --- Enemy Card (compact) ---
+
+  attr(:card, :map, required: true)
+  attr(:hit, :boolean, default: false)
+
+  defp enemy_card(assigns) do
+    max_hp = Map.get(assigns.card.properties, :card_hp, 2)
+    current_hp = assigns.card.current_hp || 0
+    hp_pct = if max_hp > 0, do: current_hp / max_hp * 100, else: 0
+    destroyed = current_hp <= 0
+
+    assigns =
+      assigns
+      |> assign(:max_hp, max_hp)
+      |> assign(:hp_pct, hp_pct)
+      |> assign(:destroyed, destroyed)
+
+    ~H"""
+    <div class={[
+      "rounded-lg border p-2 text-xs transition-all",
+      card_border(@card.type),
+      @destroyed && "opacity-25 grayscale",
+      not @destroyed && card_bg(@card.type),
+      @hit && "ring-2 ring-error animate-pulse"
+    ]}>
+      <div class="flex items-center gap-1 mb-1">
+        <.icon name={card_type_icon(@card.type)} class={["size-3 shrink-0", card_icon_color(@card.type)]} />
+        <span class="font-bold truncate">{@card.name}</span>
+      </div>
+      <div :if={not @destroyed} class="w-full bg-base-300 rounded-full h-1.5 mb-1 overflow-hidden">
+        <div
+          class={["h-full rounded-full transition-all", hp_bar_color(@card.current_hp, @max_hp)]}
+          style={"width: #{@hp_pct}%"}
+        />
+      </div>
+      <span :if={not @destroyed} class="font-mono text-[10px]">{@card.current_hp}/{@max_hp}</span>
+      <span :if={@destroyed} class="font-mono text-[10px] text-error">DESTROYED</span>
+    </div>
+    """
+  end
+
+  # --- Installed Components (player) ---
+
+  attr(:cards, :list, required: true)
+  attr(:last_attack_result, :map, default: nil)
+
+  def installed_components(assigns) do
+    ~H"""
+    <div :if={@cards != []} class="card bg-base-100 shadow-sm border border-primary/20">
+      <div class="card-body p-3">
+        <h3 class="card-title text-sm text-primary">
+          <.icon name="hero-wrench-screwdriver" class="size-4" />
+          Your Components
+          <span class="badge badge-sm badge-ghost">{length(@cards)}</span>
+        </h3>
+        <div class="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+          <.installed_card
+            :for={card <- @cards}
+            card={card}
+            hit={@last_attack_result != nil and @last_attack_result.target == card.id}
+          />
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  # --- Installed Card (compact, for player's chassis/cpu/locomotion) ---
+
+  attr(:card, :map, required: true)
+  attr(:hit, :boolean, default: false)
+
+  defp installed_card(assigns) do
+    max_hp = Map.get(assigns.card.properties, :card_hp, 2)
+    current_hp = assigns.card.current_hp || 0
+    hp_pct = if max_hp > 0, do: current_hp / max_hp * 100, else: 0
+    destroyed = current_hp <= 0
+
+    assigns =
+      assigns
+      |> assign(:max_hp, max_hp)
+      |> assign(:hp_pct, hp_pct)
+      |> assign(:destroyed, destroyed)
+
+    ~H"""
+    <div class={[
+      "rounded-lg border p-2 text-xs transition-all",
+      card_border(@card.type),
+      @destroyed && "opacity-25 grayscale",
+      not @destroyed && card_bg(@card.type),
+      @hit && "ring-2 ring-error animate-pulse"
+    ]}>
+      <div class="flex items-center gap-1 mb-1">
+        <.icon name={card_type_icon(@card.type)} class={["size-3 shrink-0", card_icon_color(@card.type)]} />
+        <span class="font-bold truncate">{@card.name}</span>
+      </div>
+      <div :if={not @destroyed} class="w-full bg-base-300 rounded-full h-1.5 mb-1 overflow-hidden">
+        <div
+          class={["h-full rounded-full transition-all", hp_bar_color(@card.current_hp, @max_hp)]}
+          style={"width: #{@hp_pct}%"}
+        />
+      </div>
+      <span :if={not @destroyed} class="font-mono text-[10px]">{@card.current_hp}/{@max_hp}</span>
+      <span :if={@destroyed} class="font-mono text-[10px] text-error">DESTROYED</span>
     </div>
     """
   end
@@ -330,7 +510,9 @@ defmodule BotgradeWeb.CombatComponents do
         <span>Stores {length(@card.dice_slots)} dice</span>
       <% :weapon -> %>
         <div class="flex items-center gap-1">
-          <span class="font-semibold">{String.capitalize(to_string(@card.properties.damage_type))}</span>
+          <span class={["font-semibold", damage_type_color(@card.properties.damage_type)]}>
+            {String.capitalize(to_string(@card.properties.damage_type))}
+          </span>
           <%= if @card.damage == :damaged and @card.properties.damage_base > 0 do %>
             <span class="line-through text-base-content/40 font-mono">+{@card.properties.damage_base}</span>
             <span class="text-warning font-mono">+{div(@card.properties.damage_base, 2)}</span>
@@ -353,12 +535,12 @@ defmodule BotgradeWeb.CombatComponents do
       <% :chassis -> %>
         <div class="flex items-center gap-1">
           <.icon name="hero-heart-mini" class="size-3.5 text-error" />
-          <%= if @card.damage == :damaged do %>
-            <span class="line-through text-base-content/40 font-mono">{@card.properties.hp_max} HP</span>
-            <span class="text-warning font-mono">{div(@card.properties.hp_max, 2)} HP</span>
-          <% else %>
-            <span class="font-mono">{@card.properties.hp_max} HP</span>
-          <% end %>
+          <span class="font-mono">{Map.get(@card.properties, :card_hp, 0)} HP</span>
+        </div>
+      <% :cpu -> %>
+        <div class="flex items-center gap-1">
+          <.icon name="hero-cpu-chip-mini" class="size-3.5 text-secondary" />
+          <span class="font-mono">Processing Unit</span>
         </div>
     <% end %>
     """
@@ -561,6 +743,7 @@ defmodule BotgradeWeb.CombatComponents do
   defp card_type_icon(:armor), do: "hero-shield-check"
   defp card_type_icon(:locomotion), do: "hero-arrow-trending-up"
   defp card_type_icon(:chassis), do: "hero-cube"
+  defp card_type_icon(:cpu), do: "hero-cpu-chip"
 
   defp card_icon_color(:battery), do: "text-warning"
   defp card_icon_color(:capacitor), do: "text-info"
@@ -568,6 +751,7 @@ defmodule BotgradeWeb.CombatComponents do
   defp card_icon_color(:armor), do: "text-primary"
   defp card_icon_color(:locomotion), do: "text-success"
   defp card_icon_color(:chassis), do: "text-base-content/50"
+  defp card_icon_color(:cpu), do: "text-secondary"
 
   defp card_bg(:battery), do: "bg-gradient-to-b from-warning/10 to-transparent"
   defp card_bg(:capacitor), do: "bg-gradient-to-b from-info/10 to-transparent"
@@ -575,6 +759,7 @@ defmodule BotgradeWeb.CombatComponents do
   defp card_bg(:armor), do: "bg-gradient-to-b from-primary/10 to-transparent"
   defp card_bg(:locomotion), do: "bg-gradient-to-b from-success/10 to-transparent"
   defp card_bg(:chassis), do: "bg-gradient-to-b from-base-300/20 to-transparent"
+  defp card_bg(:cpu), do: "bg-gradient-to-b from-secondary/10 to-transparent"
 
   defp card_border(:battery), do: "border-warning/50"
   defp card_border(:capacitor), do: "border-info/50"
@@ -582,6 +767,7 @@ defmodule BotgradeWeb.CombatComponents do
   defp card_border(:armor), do: "border-primary/50"
   defp card_border(:locomotion), do: "border-success/50"
   defp card_border(:chassis), do: "border-base-300"
+  defp card_border(:cpu), do: "border-secondary/50"
 
   defp card_badge(:battery), do: "badge-warning"
   defp card_badge(:capacitor), do: "badge-info"
@@ -589,6 +775,7 @@ defmodule BotgradeWeb.CombatComponents do
   defp card_badge(:armor), do: "badge-primary"
   defp card_badge(:locomotion), do: "badge-success"
   defp card_badge(:chassis), do: "badge-ghost"
+  defp card_badge(:cpu), do: "badge-secondary"
 
   defp card_type_label(:battery), do: "Battery"
   defp card_type_label(:capacitor), do: "Capacitor"
@@ -596,6 +783,7 @@ defmodule BotgradeWeb.CombatComponents do
   defp card_type_label(:armor), do: "Armor"
   defp card_type_label(:locomotion), do: "Movement"
   defp card_type_label(:chassis), do: "Chassis"
+  defp card_type_label(:cpu), do: "CPU"
 
   defp condition_label({:min, n}), do: "#{n}+"
   defp condition_label({:max, n}), do: "#{n}-"
@@ -608,9 +796,16 @@ defmodule BotgradeWeb.CombatComponents do
   defp result_label(%{type: :plating, value: v}), do: "+#{v} plating"
   defp result_label(%{type: :shield, value: v}), do: "+#{v} shield"
 
-  defp hp_bar_color(current, total) when current > total * 0.5, do: "bg-success"
-  defp hp_bar_color(current, total) when current > total * 0.25, do: "bg-warning"
+  defp damage_type_color(:kinetic), do: "text-amber-500"
+  defp damage_type_color(:energy), do: "text-info"
+  defp damage_type_color(:plasma), do: "text-fuchsia-500"
+  defp damage_type_color(_), do: ""
+
+  defp hp_bar_color(current, total) when is_number(current) and is_number(total) and total > 0 and current > total * 0.5, do: "bg-success"
+  defp hp_bar_color(current, total) when is_number(current) and is_number(total) and total > 0 and current > total * 0.25, do: "bg-warning"
   defp hp_bar_color(_current, _total), do: "bg-error"
+
+  defp card_interactable?(%{damage: :destroyed}, _phase), do: false
 
   defp card_interactable?(card, :power_up) do
     cond do
