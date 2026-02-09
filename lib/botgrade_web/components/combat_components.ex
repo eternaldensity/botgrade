@@ -165,25 +165,37 @@ defmodule BotgradeWeb.CombatComponents do
   attr(:phase, :atom, required: true)
   attr(:selected_die, :any, required: true)
   attr(:selected_die_value, :map, default: nil)
+  attr(:cpu_targeting, :string, default: nil)
+  attr(:cpu_discard_selected, :list, default: [])
 
   def game_card(assigns) do
     interactable = card_interactable?(assigns.card, assigns.phase)
     destroyed = assigns.card.damage == :destroyed
+    cpu_selectable = not is_nil(assigns.cpu_targeting) and not destroyed
+    cpu_selected = assigns.card.id in assigns.cpu_discard_selected
 
     assigns =
       assigns
       |> assign(:interactable, interactable)
       |> assign(:destroyed, destroyed)
+      |> assign(:cpu_selectable, cpu_selectable)
+      |> assign(:cpu_selected, cpu_selected)
 
     ~H"""
-    <div class={[
-      "rounded-xl border-2 p-3 text-sm flex flex-col gap-2 min-w-[160px] transition-all",
-      card_bg(@card.type),
-      card_border(@card.type),
-      @destroyed && "opacity-30 grayscale",
-      @interactable && "ring-2 ring-primary/40 shadow-lg cursor-pointer",
-      not @interactable and not @destroyed and @phase == :power_up && "opacity-60"
-    ]}>
+    <div
+      class={[
+        "rounded-xl border-2 p-3 text-sm flex flex-col gap-2 min-w-[160px] transition-all",
+        card_bg(@card.type),
+        card_border(@card.type),
+        @destroyed && "opacity-30 grayscale",
+        not @cpu_selectable and @interactable && "ring-2 ring-primary/40 shadow-lg cursor-pointer",
+        not @cpu_selectable and not @interactable and not @destroyed and @phase == :power_up && "opacity-60",
+        @cpu_selected && "ring-2 ring-secondary bg-secondary/10",
+        @cpu_selectable and not @cpu_selected && "cursor-pointer hover:ring-2 hover:ring-secondary/60"
+      ]}
+      phx-click={if @cpu_selectable, do: "toggle_cpu_discard"}
+      phx-value-card-id={if @cpu_selectable, do: @card.id}
+    >
       <%!-- Header: icon + name + type badge --%>
       <%!-- Single tag: show inline with title. Multiple tags: separate line. --%>
       <div class={["flex items-start gap-1", @card.damage != :damaged && "justify-between"]}>
@@ -213,8 +225,8 @@ defmodule BotgradeWeb.CombatComponents do
         <.card_stats card={@card} />
       </div>
 
-      <%!-- Dice Slots --%>
-      <div :if={@card.dice_slots != [] and not @destroyed} class="flex flex-wrap gap-1.5">
+      <%!-- Dice Slots (hidden during CPU targeting to avoid conflicting clicks) --%>
+      <div :if={@card.dice_slots != [] and not @destroyed and not @cpu_selectable} class="flex flex-wrap gap-1.5">
         <.dice_slot
           :for={slot <- @card.dice_slots}
           slot={slot}
@@ -225,9 +237,9 @@ defmodule BotgradeWeb.CombatComponents do
         />
       </div>
 
-      <%!-- Battery Activation Button --%>
+      <%!-- Battery Activation Button (hidden during CPU targeting) --%>
       <button
-        :if={@card.type == :battery and @phase == :power_up and not @destroyed and @card.properties.remaining_activations > 0 and not Map.get(@card.properties, :activated_this_turn, false)}
+        :if={@card.type == :battery and @phase == :power_up and not @destroyed and not @cpu_selectable and @card.properties.remaining_activations > 0 and not Map.get(@card.properties, :activated_this_turn, false)}
         phx-click="activate_battery"
         phx-value-card-id={@card.id}
         class="btn btn-sm btn-primary w-full"
@@ -369,6 +381,9 @@ defmodule BotgradeWeb.CombatComponents do
 
   attr(:cards, :list, required: true)
   attr(:last_attack_result, :map, default: nil)
+  attr(:phase, :atom, default: nil)
+  attr(:cpu_targeting, :string, default: nil)
+  attr(:cpu_discard_selected, :list, default: [])
 
   def installed_components(assigns) do
     ~H"""
@@ -384,6 +399,9 @@ defmodule BotgradeWeb.CombatComponents do
             :for={card <- @cards}
             card={card}
             hit={@last_attack_result != nil and @last_attack_result.target == card.id}
+            phase={@phase}
+            cpu_targeting={@cpu_targeting}
+            cpu_discard_selected={@cpu_discard_selected}
           />
         </div>
       </div>
@@ -395,6 +413,9 @@ defmodule BotgradeWeb.CombatComponents do
 
   attr(:card, :map, required: true)
   attr(:hit, :boolean, default: false)
+  attr(:phase, :atom, default: nil)
+  attr(:cpu_targeting, :string, default: nil)
+  attr(:cpu_discard_selected, :list, default: [])
 
   defp installed_card(assigns) do
     max_hp = Map.get(assigns.card.properties, :card_hp, 2)
@@ -414,7 +435,8 @@ defmodule BotgradeWeb.CombatComponents do
       card_border(@card.type),
       @destroyed && "opacity-25 grayscale",
       not @destroyed && card_bg(@card.type),
-      @hit && "ring-2 ring-error animate-pulse"
+      @hit && "ring-2 ring-error animate-pulse",
+      @cpu_targeting == @card.id && "ring-2 ring-secondary"
     ]}>
       <div class="flex items-center gap-1 mb-1">
         <.icon name={card_type_icon(@card.type)} class={["size-3 shrink-0", card_icon_color(@card.type)]} />
@@ -428,6 +450,58 @@ defmodule BotgradeWeb.CombatComponents do
       </div>
       <span :if={not @destroyed} class="font-mono text-[10px]">{@card.current_hp}/{@max_hp}</span>
       <span :if={@destroyed} class="font-mono text-[10px] text-error">DESTROYED</span>
+
+      <%!-- CPU Ability: Activate button --%>
+      <button
+        :if={
+          @card.type == :cpu and
+          @phase == :power_up and
+          not @destroyed and
+          is_nil(@cpu_targeting) and
+          not Map.get(@card.properties, :activated_this_turn, false) and
+          Map.has_key?(@card.properties, :cpu_ability)
+        }
+        phx-click="activate_cpu"
+        phx-value-card-id={@card.id}
+        class="btn btn-xs btn-secondary w-full mt-1"
+      >
+        Activate
+      </button>
+
+      <%!-- CPU Ability: Already activated indicator --%>
+      <span
+        :if={
+          @card.type == :cpu and
+          not @destroyed and
+          Map.get(@card.properties, :activated_this_turn, false)
+        }
+        class="text-[10px] text-secondary/50 mt-1"
+      >
+        Used this turn
+      </span>
+
+      <%!-- CPU Targeting Mode: selection count + Confirm/Cancel --%>
+      <div :if={@cpu_targeting == @card.id and not @destroyed} class="mt-1 space-y-1">
+        <span class="text-[10px] text-secondary font-semibold">
+          Discard {@card.properties.cpu_ability.discard_count} card(s)
+          ({length(@cpu_discard_selected)} selected)
+        </span>
+        <div class="flex gap-1">
+          <button
+            :if={length(@cpu_discard_selected) == @card.properties.cpu_ability.discard_count}
+            phx-click="confirm_cpu_ability"
+            class="btn btn-xs btn-success flex-1"
+          >
+            Confirm
+          </button>
+          <button
+            phx-click="cancel_cpu_ability"
+            class="btn btn-xs btn-ghost flex-1"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
     </div>
     """
   end
@@ -554,7 +628,7 @@ defmodule BotgradeWeb.CombatComponents do
       <% :cpu -> %>
         <div class="flex items-center gap-1">
           <.icon name="hero-cpu-chip-mini" class="size-3.5 text-secondary" />
-          <span class="font-mono">Processing Unit</span>
+          <span class="text-[10px]">{cpu_ability_label(@card.properties[:cpu_ability])}</span>
         </div>
     <% end %>
     """
@@ -589,6 +663,8 @@ defmodule BotgradeWeb.CombatComponents do
   attr(:selected_die_value, :map, default: nil)
   attr(:count, :integer, default: nil)
   attr(:scrollable, :boolean, default: false)
+  attr(:cpu_targeting, :string, default: nil)
+  attr(:cpu_discard_selected, :list, default: [])
 
   def card_area(assigns) do
     assigns =
@@ -600,6 +676,7 @@ defmodule BotgradeWeb.CombatComponents do
         <h3 class="card-title text-sm">
           {@title}
           <span class="badge badge-sm badge-ghost">{@display_count}</span>
+          <span :if={@cpu_targeting} class="badge badge-sm badge-secondary">Select cards to discard</span>
         </h3>
         <div class={[
           @scrollable && "flex overflow-x-auto gap-3 pb-2 snap-x md:grid md:grid-cols-3 lg:grid-cols-5 md:overflow-visible",
@@ -611,6 +688,8 @@ defmodule BotgradeWeb.CombatComponents do
               phase={@phase}
               selected_die={@selected_die}
               selected_die_value={@selected_die_value}
+              cpu_targeting={@cpu_targeting}
+              cpu_discard_selected={@cpu_discard_selected}
             />
           </div>
         </div>
@@ -828,6 +907,11 @@ defmodule BotgradeWeb.CombatComponents do
   defp card_type_label(:locomotion), do: "Movement"
   defp card_type_label(:chassis), do: "Chassis"
   defp card_type_label(:cpu), do: "CPU"
+
+  defp cpu_ability_label(%{type: :discard_draw, discard_count: d, draw_count: r}),
+    do: "Discard #{d}, Draw #{r}"
+
+  defp cpu_ability_label(_), do: "Processing Unit"
 
   defp condition_label({:min, n}), do: "#{n}+"
   defp condition_label({:max, n}), do: "#{n}-"

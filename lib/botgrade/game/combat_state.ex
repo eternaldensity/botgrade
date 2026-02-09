@@ -20,7 +20,9 @@ defmodule Botgrade.Game.CombatState do
           scavenge_loot: [Card.t()],
           scavenge_selected: [String.t()],
           scavenge_limit: non_neg_integer(),
-          scavenge_scraps: map()
+          scavenge_scraps: map(),
+          cpu_targeting: String.t() | nil,
+          cpu_discard_selected: [String.t()]
         }
 
   @enforce_keys [:id, :player, :enemy]
@@ -37,6 +39,8 @@ defmodule Botgrade.Game.CombatState do
     scavenge_selected: [],
     scavenge_limit: 3,
     scavenge_scraps: %{},
-    last_attack_result: nil
+    last_attack_result: nil,
+    cpu_targeting: nil,
+    cpu_discard_selected: []
   ]
 end

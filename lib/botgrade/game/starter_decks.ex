@@ -386,7 +386,8 @@ defmodule Botgrade.Game.StarterDecks do
       name: name,
       type: :cpu,
       properties: %{
-        card_hp: Keyword.get(opts, :card_hp, 2)
+        card_hp: Keyword.get(opts, :card_hp, 2),
+        cpu_ability: Keyword.get(opts, :cpu_ability, %{type: :discard_draw, discard_count: 2, draw_count: 1})
       },
       dice_slots: []
     }

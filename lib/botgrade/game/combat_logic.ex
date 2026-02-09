@@ -101,6 +101,85 @@ defmodule Botgrade.Game.CombatLogic do
 
   def activate_battery(_state, _card_id), do: {:error, "Not in power up phase."}
 
+  # --- CPU Ability ---
+
+  @spec activate_cpu(CombatState.t(), String.t()) :: {:ok, CombatState.t()} | {:error, String.t()}
+  def activate_cpu(%CombatState{phase: :power_up, cpu_targeting: nil} = state, card_id) do
+    case find_installed_card(state.player, card_id) do
+      nil ->
+        {:error, "CPU not found in installed components."}
+
+      %Card{type: :cpu} = card ->
+        cond do
+          card.damage == :destroyed ->
+            {:error, "CPU is destroyed."}
+
+          Map.get(card.properties, :activated_this_turn, false) ->
+            {:error, "CPU already activated this turn."}
+
+          not has_enough_hand_cards?(state.player, card.properties.cpu_ability) ->
+            {:error, "Not enough cards in hand to use this ability."}
+
+          true ->
+            {:ok, %{state | cpu_targeting: card_id, cpu_discard_selected: []}}
+        end
+
+      _other ->
+        {:error, "That card is not a CPU."}
+    end
+  end
+
+  def activate_cpu(%CombatState{cpu_targeting: targeting}, _card_id) when not is_nil(targeting),
+    do: {:error, "Already in CPU targeting mode."}
+
+  def activate_cpu(_state, _card_id), do: {:error, "Not in power up phase."}
+
+  @spec toggle_cpu_discard(CombatState.t(), String.t()) :: {:ok, CombatState.t()} | {:error, String.t()}
+  def toggle_cpu_discard(%CombatState{phase: :power_up, cpu_targeting: cpu_id} = state, card_id)
+      when not is_nil(cpu_id) do
+    cpu_card = find_installed_card(state.player, cpu_id)
+    max_select = cpu_card.properties.cpu_ability.discard_count
+
+    cond do
+      card_id in state.cpu_discard_selected ->
+        {:ok, %{state | cpu_discard_selected: List.delete(state.cpu_discard_selected, card_id)}}
+
+      length(state.cpu_discard_selected) >= max_select ->
+        {:error, "Already selected #{max_select} cards."}
+
+      find_card_in_hand(state.player, card_id) != nil ->
+        {:ok, %{state | cpu_discard_selected: state.cpu_discard_selected ++ [card_id]}}
+
+      true ->
+        {:error, "Card not found in hand."}
+    end
+  end
+
+  def toggle_cpu_discard(_state, _card_id), do: {:error, "Not in CPU targeting mode."}
+
+  @spec confirm_cpu_ability(CombatState.t()) :: {:ok, CombatState.t()} | {:error, String.t()}
+  def confirm_cpu_ability(%CombatState{phase: :power_up, cpu_targeting: cpu_id} = state)
+      when not is_nil(cpu_id) do
+    cpu_card = find_installed_card(state.player, cpu_id)
+    ability = cpu_card.properties.cpu_ability
+
+    if length(state.cpu_discard_selected) != ability.discard_count do
+      {:error, "Select exactly #{ability.discard_count} cards to discard."}
+    else
+      {:ok, execute_cpu_ability(state, cpu_card, ability, :player, state.cpu_discard_selected)}
+    end
+  end
+
+  def confirm_cpu_ability(_state), do: {:error, "Not in CPU targeting mode."}
+
+  @spec cancel_cpu_ability(CombatState.t()) :: {:ok, CombatState.t()} | {:error, String.t()}
+  def cancel_cpu_ability(%CombatState{phase: :power_up, cpu_targeting: cpu_id} = state)
+      when not is_nil(cpu_id) do
+    {:ok, %{state | cpu_targeting: nil, cpu_discard_selected: []}}
+  end
+
+  def cancel_cpu_ability(_state), do: {:error, "Not in CPU targeting mode."}
+
   # --- Dice Allocation (available during :power_up, with immediate activation) ---
 
   @spec allocate_die(CombatState.t(), non_neg_integer(), String.t(), String.t()) ::
@@ -184,7 +263,7 @@ defmodule Botgrade.Game.CombatLogic do
 
   @spec end_turn(CombatState.t()) :: CombatState.t()
   def end_turn(%CombatState{phase: :power_up} = state) do
-    state
+    %{state | cpu_targeting: nil, cpu_discard_selected: []}
     |> cleanup_turn(:player)
     |> check_victory()
     |> maybe_transition_to_enemy()
@@ -207,6 +286,7 @@ defmodule Botgrade.Game.CombatLogic do
     state = %{state | enemy: enemy} |> add_log("Enemy draws #{length(enemy.hand)} cards.")
 
     state = activate_all_batteries(state, :enemy)
+    state = ai_use_cpu_ability(state)
     state = ai_allocate_dice(state)
 
     state
@@ -572,11 +652,15 @@ defmodule Botgrade.Game.CombatLogic do
         card.type == :capacitor and Enum.any?(card.dice_slots, &(&1.assigned_die != nil))
       end)
 
+    # Reset CPU activation flags on installed cards
+    installed = Enum.map(combatant.installed, &reset_cpu_flag/1)
+
     combatant = %{
       combatant
       | hand: charged_capacitors,
         discard: combatant.discard ++ to_discard,
         in_play: [],
+        installed: installed,
         available_dice: [],
         # Shield resets each turn, plating persists
         shield: 0
@@ -764,6 +848,43 @@ defmodule Botgrade.Game.CombatLogic do
 
   defp reset_battery_flag(card), do: card
 
+  defp reset_cpu_flag(%Card{type: :cpu} = card) do
+    %{card | properties: Map.delete(card.properties, :activated_this_turn)}
+  end
+
+  defp reset_cpu_flag(card), do: card
+
+  defp find_installed_card(robot, card_id) do
+    Enum.find(robot.installed, &(&1.id == card_id))
+  end
+
+  defp has_enough_hand_cards?(robot, %{discard_count: n}) do
+    length(robot.hand) >= n
+  end
+
+  defp execute_cpu_ability(state, cpu_card, %{type: :discard_draw} = ability, who, selected_ids) do
+    {combatant, _} = get_combatants(state, who)
+    who_name = if who == :player, do: "You", else: "Enemy"
+
+    {discarded_cards, remaining_hand} =
+      Enum.split_with(combatant.hand, fn card -> card.id in selected_ids end)
+
+    combatant = %{combatant | hand: remaining_hand, discard: combatant.discard ++ discarded_cards}
+    combatant = draw_cards(combatant, ability.draw_count)
+
+    updated_cpu = %{cpu_card | properties: Map.put(cpu_card.properties, :activated_this_turn, true)}
+    combatant = %{combatant | installed: replace_card(combatant.installed, cpu_card.id, updated_cpu)}
+
+    discarded_names = Enum.map_join(discarded_cards, ", ", & &1.name)
+
+    state =
+      if who == :player,
+        do: %{state | player: combatant, cpu_targeting: nil, cpu_discard_selected: []},
+        else: %{state | enemy: combatant}
+
+    add_log(state, "#{who_name} activates #{cpu_card.name}: discarded #{discarded_names}, drew #{ability.draw_count}.")
+  end
+
   defp apply_damage_penalty(value, %Card{damage: :intact}), do: value
   defp apply_damage_penalty(value, %Card{damage: :damaged}), do: max(0, div(value, 2))
   defp apply_damage_penalty(_value, %Card{damage: :destroyed}), do: 0
@@ -865,6 +986,45 @@ defmodule Botgrade.Game.CombatLogic do
 
   defp put_combatants(state, :enemy, attacker, defender),
     do: %{state | enemy: attacker, player: defender}
+
+  defp ai_use_cpu_ability(state) do
+    cpus =
+      state.enemy.installed
+      |> Enum.filter(fn card ->
+        card.type == :cpu and
+          card.damage != :destroyed and
+          not Map.get(card.properties, :activated_this_turn, false) and
+          Map.has_key?(card.properties, :cpu_ability)
+      end)
+
+    Enum.reduce(cpus, state, fn cpu_card, acc_state ->
+      ai_execute_cpu_ability(acc_state, cpu_card, cpu_card.properties.cpu_ability)
+    end)
+  end
+
+  defp ai_execute_cpu_ability(state, cpu_card, %{type: :discard_draw} = ability) do
+    enemy = state.enemy
+
+    if length(enemy.hand) >= ability.discard_count do
+      # AI picks worst cards: destroyed > depleted batteries > damaged > others
+      sorted_hand =
+        Enum.sort_by(enemy.hand, fn card ->
+          cond do
+            card.damage == :destroyed -> 0
+            card.type == :battery and card.properties.remaining_activations <= 0 -> 1
+            card.damage == :damaged -> 2
+            true -> 3
+          end
+        end)
+
+      to_discard = Enum.take(sorted_hand, ability.discard_count)
+      selected_ids = Enum.map(to_discard, & &1.id)
+
+      execute_cpu_ability(state, cpu_card, ability, :enemy, selected_ids)
+    else
+      state
+    end
+  end
 
   defp add_log(state, message) do
     %{state | log: [message | state.log]}

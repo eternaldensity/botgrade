@@ -58,6 +58,16 @@ defmodule Botgrade.Game.CardSerializer do
     }
   end
 
+  defp serialize_prop_value(:cpu_ability, nil), do: nil
+
+  defp serialize_prop_value(:cpu_ability, ability) do
+    %{
+      "type" => to_string(ability.type),
+      "discard_count" => ability[:discard_count],
+      "draw_count" => ability[:draw_count]
+    }
+  end
+
   defp serialize_prop_value(_key, v), do: v
 
   defp deserialize_properties(nil), do: %{}
@@ -83,6 +93,16 @@ defmodule Botgrade.Game.CardSerializer do
       condition: deserialize_condition(dm["condition"]),
       armor_type: String.to_atom(dm["armor_type"]),
       shield_base: dm["shield_base"]
+    }
+  end
+
+  defp deserialize_prop_value("cpu_ability", nil), do: nil
+
+  defp deserialize_prop_value("cpu_ability", ability) do
+    %{
+      type: String.to_atom(ability["type"]),
+      discard_count: ability["discard_count"],
+      draw_count: ability["draw_count"]
     }
   end
 

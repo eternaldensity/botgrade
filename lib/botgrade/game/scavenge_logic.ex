@@ -129,6 +129,9 @@ defmodule Botgrade.Game.ScavengeLogic do
       :battery ->
         %{card | properties: %{props | remaining_activations: props.max_activations} |> Map.delete(:activated_this_turn)}
 
+      :cpu ->
+        %{card | properties: Map.delete(props, :activated_this_turn)}
+
       _ ->
         %{card | properties: props}
     end

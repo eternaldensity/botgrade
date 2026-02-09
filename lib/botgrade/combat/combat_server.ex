@@ -15,6 +15,18 @@ defmodule Botgrade.Combat.CombatServer do
   def activate_battery(combat_id, card_id),
     do: GenServer.call(via(combat_id), {:activate_battery, card_id})
 
+  def activate_cpu(combat_id, card_id),
+    do: GenServer.call(via(combat_id), {:activate_cpu, card_id})
+
+  def toggle_cpu_discard(combat_id, card_id),
+    do: GenServer.call(via(combat_id), {:toggle_cpu_discard, card_id})
+
+  def confirm_cpu_ability(combat_id),
+    do: GenServer.call(via(combat_id), :confirm_cpu_ability)
+
+  def cancel_cpu_ability(combat_id),
+    do: GenServer.call(via(combat_id), :cancel_cpu_ability)
+
   def allocate_die(combat_id, die_index, card_id, slot_id),
     do: GenServer.call(via(combat_id), {:allocate_die, die_index, card_id, slot_id})
 
@@ -54,6 +66,54 @@ defmodule Botgrade.Combat.CombatServer do
   @impl true
   def handle_call({:activate_battery, card_id}, _from, state) do
     case CombatLogic.activate_battery(state, card_id) do
+      {:ok, new_state} ->
+        broadcast(new_state)
+        {:reply, {:ok, new_state}, new_state}
+
+      {:error, reason} ->
+        {:reply, {:error, reason}, state}
+    end
+  end
+
+  @impl true
+  def handle_call({:activate_cpu, card_id}, _from, state) do
+    case CombatLogic.activate_cpu(state, card_id) do
+      {:ok, new_state} ->
+        broadcast(new_state)
+        {:reply, {:ok, new_state}, new_state}
+
+      {:error, reason} ->
+        {:reply, {:error, reason}, state}
+    end
+  end
+
+  @impl true
+  def handle_call({:toggle_cpu_discard, card_id}, _from, state) do
+    case CombatLogic.toggle_cpu_discard(state, card_id) do
+      {:ok, new_state} ->
+        broadcast(new_state)
+        {:reply, {:ok, new_state}, new_state}
+
+      {:error, reason} ->
+        {:reply, {:error, reason}, state}
+    end
+  end
+
+  @impl true
+  def handle_call(:confirm_cpu_ability, _from, state) do
+    case CombatLogic.confirm_cpu_ability(state) do
+      {:ok, new_state} ->
+        broadcast(new_state)
+        {:reply, {:ok, new_state}, new_state}
+
+      {:error, reason} ->
+        {:reply, {:error, reason}, state}
+    end
+  end
+
+  @impl true
+  def handle_call(:cancel_cpu_ability, _from, state) do
+    case CombatLogic.cancel_cpu_ability(state) do
       {:ok, new_state} ->
         broadcast(new_state)
         {:reply, {:ok, new_state}, new_state}

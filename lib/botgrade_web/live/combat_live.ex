@@ -49,6 +49,38 @@ defmodule BotgradeWeb.CombatLive do
   end
 
   @impl true
+  def handle_event("activate_cpu", %{"card-id" => card_id}, socket) do
+    case CombatServer.activate_cpu(socket.assigns.combat_id, card_id) do
+      {:ok, _state} -> {:noreply, assign(socket, error_message: nil)}
+      {:error, reason} -> {:noreply, assign(socket, error_message: reason)}
+    end
+  end
+
+  @impl true
+  def handle_event("toggle_cpu_discard", %{"card-id" => card_id}, socket) do
+    case CombatServer.toggle_cpu_discard(socket.assigns.combat_id, card_id) do
+      {:ok, _state} -> {:noreply, assign(socket, error_message: nil)}
+      {:error, reason} -> {:noreply, assign(socket, error_message: reason)}
+    end
+  end
+
+  @impl true
+  def handle_event("confirm_cpu_ability", _params, socket) do
+    case CombatServer.confirm_cpu_ability(socket.assigns.combat_id) do
+      {:ok, _state} -> {:noreply, assign(socket, error_message: nil)}
+      {:error, reason} -> {:noreply, assign(socket, error_message: reason)}
+    end
+  end
+
+  @impl true
+  def handle_event("cancel_cpu_ability", _params, socket) do
+    case CombatServer.cancel_cpu_ability(socket.assigns.combat_id) do
+      {:ok, _state} -> {:noreply, assign(socket, error_message: nil)}
+      {:error, reason} -> {:noreply, assign(socket, error_message: reason)}
+    end
+  end
+
+  @impl true
   def handle_event("select_die", %{"die-index" => idx}, socket) do
     index = String.to_integer(idx)
 
@@ -222,6 +254,9 @@ defmodule BotgradeWeb.CombatLive do
           :if={@state.result == :ongoing}
           cards={@state.player.installed}
           last_attack_result={@state.last_attack_result}
+          phase={@state.phase}
+          cpu_targeting={@state.cpu_targeting}
+          cpu_discard_selected={@state.cpu_discard_selected}
         />
 
         <%!-- Player Hand --%>
@@ -232,6 +267,8 @@ defmodule BotgradeWeb.CombatLive do
           selected_die={@selected_die}
           selected_die_value={@die_value}
           count={length(@state.player.hand)}
+          cpu_targeting={@state.cpu_targeting}
+          cpu_discard_selected={@state.cpu_discard_selected}
           scrollable
         />
       </div>
