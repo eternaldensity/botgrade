@@ -28,7 +28,11 @@ defmodule BotgradeWeb.PageController do
   end
 
   def continue_campaign(conn, %{"id" => campaign_id}) do
-    {:ok, _pid} = Botgrade.Campaign.CampaignSupervisor.start_campaign(campaign_id, load_save: true)
+    case Botgrade.Campaign.CampaignSupervisor.start_campaign(campaign_id, load_save: true) do
+      {:ok, _pid} -> :ok
+      {:error, {:already_started, _pid}} -> :ok
+    end
+
     redirect(conn, to: ~p"/campaign/#{campaign_id}")
   end
 end
