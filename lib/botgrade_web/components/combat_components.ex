@@ -629,28 +629,36 @@ defmodule BotgradeWeb.CombatComponents do
           />
         </div>
       <% :capacitor -> %>
-        <span>Stores {length(@card.dice_slots)} dice</span>
+        <div class="space-y-0.5">
+          <span>Stores {length(@card.dice_slots)} dice</span>
+          <div class="text-[10px] text-base-content/50">Stored dice persist between turns</div>
+        </div>
       <% :weapon -> %>
-        <div class="flex items-center gap-1">
-          <span class={["font-semibold", damage_type_color(@card.properties.damage_type)]}>
-            {String.capitalize(to_string(@card.properties.damage_type))}
-          </span>
-          <%= if @card.damage == :damaged and @card.properties.damage_base > 0 do %>
-            <span class="line-through text-base-content/40 font-mono">+{@card.properties.damage_base}</span>
-            <span class="text-warning font-mono">+{div(@card.properties.damage_base, 2)}</span>
-          <% else %>
-            <span :if={@card.properties.damage_base > 0} class="text-error font-mono">+{@card.properties.damage_base}</span>
-          <% end %>
+        <div class="space-y-0.5">
+          <div class="flex items-center gap-1 flex-wrap">
+            <span class={["font-semibold", damage_type_color(@card.properties.damage_type)]}>
+              {String.capitalize(to_string(@card.properties.damage_type))}
+            </span>
+            <span class="font-mono text-error">{weapon_damage_formula(@card)}</span>
+          </div>
+          <div :if={has_slot_conditions?(@card)} class="text-[10px] text-base-content/50">
+            {slot_requirements_label(@card)}
+          </div>
+          <div :if={Map.has_key?(@card.properties, :dual_mode)} class="text-[10px] text-info">
+            {dual_mode_label(@card.properties.dual_mode)}
+          </div>
         </div>
       <% :armor -> %>
-        <div class="flex items-center gap-1">
-          <span class="font-semibold">{String.capitalize(to_string(@card.properties.armor_type))}</span>
-          <%= if @card.damage == :damaged and @card.properties.shield_base > 0 do %>
-            <span class="line-through text-base-content/40 font-mono">+{@card.properties.shield_base}</span>
-            <span class="text-warning font-mono">+{div(@card.properties.shield_base, 2)}</span>
-          <% else %>
-            <span :if={@card.properties.shield_base > 0} class="text-info font-mono">+{@card.properties.shield_base}</span>
-          <% end %>
+        <div class="space-y-0.5">
+          <div class="flex items-center gap-1">
+            <span class="font-semibold">{String.capitalize(to_string(@card.properties.armor_type))}</span>
+            <span class={["font-mono", armor_type_color(@card.properties.armor_type)]}>
+              {armor_formula(@card)}
+            </span>
+          </div>
+          <div :if={has_slot_conditions?(@card)} class="text-[10px] text-base-content/50">
+            {slot_requirements_label(@card)}
+          </div>
         </div>
       <% :locomotion -> %>
         <span>Speed <span class="font-mono text-success">+{@card.properties.speed_base}</span></span>
@@ -660,11 +668,35 @@ defmodule BotgradeWeb.CombatComponents do
           <span class="font-mono">{Map.get(@card.properties, :card_hp, 0)} HP</span>
         </div>
       <% :cpu -> %>
-        <div class="flex items-center gap-1">
-          <.icon name="hero-cpu-chip-mini" class="size-3.5 text-secondary" />
-          <span class="text-[10px]">{cpu_ability_label(@card.properties[:cpu_ability])}</span>
+        <div class="space-y-0.5">
+          <div class="flex items-center gap-1">
+            <.icon name="hero-cpu-chip-mini" class="size-3.5 text-secondary" />
+            <span class="font-semibold text-[10px]">{cpu_ability_label(@card.properties[:cpu_ability])}</span>
+          </div>
+          <div class="text-[10px] text-base-content/50">
+            {cpu_ability_description(@card.properties[:cpu_ability])}
+          </div>
         </div>
     <% end %>
+    """
+  end
+
+  # --- Card Detail Stats (for scavenge panel) ---
+
+  attr(:card, :map, required: true)
+
+  defp card_detail_stats(assigns) do
+    ~H"""
+    <div class="space-y-1">
+      <.card_stats card={@card} />
+      <div :if={@card.damage == :damaged} class="text-[10px] text-warning bg-warning/10 rounded px-1.5 py-0.5">
+        <.icon name="hero-exclamation-triangle-mini" class="size-3 inline" />
+        {damage_penalty_description(@card)}
+      </div>
+      <div class="text-[10px] text-base-content/50">
+        Card HP: {Map.get(@card.properties, :card_hp, 2)}
+      </div>
+    </div>
     """
   end
 
@@ -793,7 +825,7 @@ defmodule BotgradeWeb.CombatComponents do
               </span>
             </div>
             <div class="text-base-content/60 mb-1">
-              <.card_stats card={card} />
+              <.card_detail_stats card={card} />
             </div>
             <div class="flex gap-1 mt-1">
               <span :if={card.damage == :damaged} class="badge badge-xs badge-warning">DAMAGED</span>
@@ -1038,4 +1070,88 @@ defmodule BotgradeWeb.CombatComponents do
   defp scrap_label(:plastic), do: "Plastic"
   defp scrap_label(:grease), do: "Grease"
   defp scrap_label(:chips), do: "Chips"
+
+  # --- Card Description Helpers ---
+
+  defp weapon_damage_formula(card) do
+    base = card.properties.damage_base
+    slot_count = length(card.dice_slots)
+
+    dice_part = if slot_count == 1, do: "die", else: "#{slot_count} dice"
+    base_part = if base > 0, do: " + #{base}", else: ""
+
+    "#{dice_part}#{base_part}"
+  end
+
+  defp armor_formula(card) do
+    base = card.properties.shield_base
+    slot_count = length(card.dice_slots)
+
+    dice_part = if slot_count == 1, do: "die", else: "#{slot_count} dice"
+    base_part = if base > 0, do: " + #{base}", else: ""
+
+    "#{dice_part}#{base_part}"
+  end
+
+  defp armor_type_color(:plating), do: "text-primary"
+  defp armor_type_color(:shield), do: "text-info"
+  defp armor_type_color(_), do: ""
+
+  defp has_slot_conditions?(card) do
+    Enum.any?(card.dice_slots, fn slot -> slot.condition != nil end)
+  end
+
+  defp slot_requirements_label(card) do
+    conditions =
+      card.dice_slots
+      |> Enum.filter(& &1.condition)
+      |> Enum.map(&condition_label(&1.condition))
+      |> Enum.uniq()
+
+    case conditions do
+      [] -> ""
+      [c] -> "Requires: #{c}"
+      cs -> "Requires: #{Enum.join(cs, ", ")}"
+    end
+  end
+
+  defp dual_mode_label(%{condition: cond, armor_type: type, shield_base: base}) do
+    type_name = String.capitalize(to_string(type))
+    cond_text = condition_label(cond)
+    base_text = if base > 0, do: " (base +#{base})", else: ""
+    "If #{cond_text}: becomes #{type_name}#{base_text}"
+  end
+
+  defp cpu_ability_description(%{type: :discard_draw, discard_count: d, draw_count: r}),
+    do: "Discard #{d} card(s), then draw #{r}"
+
+  defp cpu_ability_description(%{type: :reflex_block}),
+    do: "Boost an armor card's shield by +1"
+
+  defp cpu_ability_description(%{type: :target_lock}),
+    do: "Next weapon bypasses all defenses"
+
+  defp cpu_ability_description(%{type: :overclock_battery}),
+    do: "Next battery can activate twice"
+
+  defp cpu_ability_description(%{type: :siphon_power}),
+    do: "Spend 2 shield to restore a battery charge"
+
+  defp cpu_ability_description(_), do: ""
+
+  # --- Damage Penalty Descriptions (for scavenge panel) ---
+
+  defp damage_penalty_description(%{type: :battery} = card) do
+    count = card.properties.dice_count
+    if count > 1 do
+      "Damaged: rolls #{count - 1}d#{card.properties.die_sides} instead of #{count}d#{card.properties.die_sides}"
+    else
+      "Damaged: die capped at #{card.properties.die_sides - 2}"
+    end
+  end
+
+  defp damage_penalty_description(%{type: :weapon}), do: "Damaged: total damage halved"
+  defp damage_penalty_description(%{type: :armor}), do: "Damaged: total defense halved"
+  defp damage_penalty_description(%{type: :cpu}), do: "Damaged: 1-in-3 chance of malfunction"
+  defp damage_penalty_description(_card), do: "Damaged: reduced effectiveness"
 end

@@ -21,6 +21,7 @@ defmodule BotgradeWeb.Router do
     post "/combat/start", PageController, :start_combat
     post "/campaign/start", PageController, :start_campaign
     get "/campaign/continue/:id", PageController, :continue_campaign
+    post "/campaign/delete/:id", PageController, :delete_campaign
     live "/campaign/:id", CampaignLive
     live "/combat/:id", CombatLive
   end

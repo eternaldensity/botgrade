@@ -27,6 +27,19 @@ defmodule BotgradeWeb.PageController do
     redirect(conn, to: ~p"/campaign/#{campaign_id}")
   end
 
+  def delete_campaign(conn, %{"id" => campaign_id}) do
+    case Registry.lookup(Botgrade.Campaign.Registry, campaign_id) do
+      [{pid, _}] -> GenServer.stop(pid, :normal)
+      [] -> :ok
+    end
+
+    Botgrade.Campaign.CampaignPersistence.delete_save(campaign_id)
+
+    conn
+    |> put_flash(:info, "Campaign deleted.")
+    |> redirect(to: ~p"/")
+  end
+
   def continue_campaign(conn, %{"id" => campaign_id}) do
     case Botgrade.Campaign.CampaignSupervisor.start_campaign(campaign_id, load_save: true) do
       {:ok, _pid} -> :ok

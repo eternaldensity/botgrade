@@ -19,10 +19,7 @@
         <div class="mt-4 space-y-2 text-left">
           <p class="text-sm font-semibold text-base-content/80 text-center mb-2">Continue Campaign:</p>
           <%= for save <- @saves do %>
-            <a
-              href={"/campaign/continue/#{save.id}"}
-              class="flex items-center justify-between p-3 rounded-lg border border-base-300 hover:border-primary cursor-pointer transition-colors"
-            >
+            <div class="flex items-center justify-between p-3 rounded-lg border border-base-300 hover:border-primary transition-colors">
               <div>
                 <div class="font-semibold text-base-content text-sm">Campaign <%= save.id %></div>
                 <div class="text-xs text-base-content/50">
@@ -31,8 +28,17 @@
                   <% end %>
                 </div>
               </div>
-              <span class="btn btn-sm btn-ghost">Resume</span>
-            </a>
+              <div class="flex items-center gap-1">
+                <a href={"/campaign/continue/#{save.id}"} class="btn btn-sm btn-ghost">Resume</a>
+                <form action={"/campaign/delete/#{save.id}"} method="post"
+                      onsubmit="return confirm('Delete this campaign save?')">
+                  <input type="hidden" name="_csrf_token" value={Phoenix.Controller.get_csrf_token()} />
+                  <button type="submit" class="btn btn-sm btn-ghost text-error">
+                    Delete
+                  </button>
+                </form>
+              </div>
+            </div>
           <% end %>
         </div>
       <% end %>
