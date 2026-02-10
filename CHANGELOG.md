@@ -24,5 +24,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Clear last_result on cards during turn cleanup (#4)
 
 ### Changed
+- Fix overlapping menu/fight badge with enemy status bar (#25)
 - Combat clarity: plating vs shields, unified power phase, immediate activation, damage display (#3)
 - Combat UI/UX overhaul: component extraction, layout redesign, card redesign, dice UX (#2)

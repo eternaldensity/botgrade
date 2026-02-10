@@ -220,17 +220,23 @@ defmodule BotgradeWeb.CombatLive do
 
     ~H"""
     <div class="min-h-screen bg-base-200 flex flex-col">
-      <%!-- Back to Menu + Combat Counter (quick combat only) --%>
-      <div :if={is_nil(@campaign_id)} class="absolute top-2 left-2 z-50 flex items-center gap-2">
-        <.link navigate={~p"/"} class="btn btn-ghost btn-sm gap-1 text-base-content/60 hover:text-base-content">
-          <.icon name="hero-arrow-left-mini" class="size-4" />
+      <%!-- Quick combat nav when status bar is hidden --%>
+      <div :if={is_nil(@campaign_id) and @state.phase in [:ended, :scavenging]} class="px-4 py-2 flex items-center gap-2 bg-base-100 border-b border-base-300">
+        <.link navigate={~p"/"} class="btn btn-ghost btn-xs gap-1 text-base-content/60 hover:text-base-content">
+          <.icon name="hero-arrow-left-mini" class="size-3.5" />
           Menu
         </.link>
         <span class="badge badge-sm badge-neutral">Fight {@combat_number}</span>
       </div>
 
       <%!-- Enemy Status (sticky top) --%>
-      <.robot_status_bar :if={@state.phase not in [:ended, :scavenging]} robot={@state.enemy} label="ENEMY" position={:top} />
+      <.robot_status_bar
+        :if={@state.phase not in [:ended, :scavenging]}
+        robot={@state.enemy}
+        label="ENEMY"
+        position={:top}
+        combat_number={unless @campaign_id, do: @combat_number}
+      />
 
       <%!-- Enemy Board --%>
       <.enemy_board

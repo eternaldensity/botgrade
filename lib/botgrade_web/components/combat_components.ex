@@ -12,6 +12,7 @@ defmodule BotgradeWeb.CombatComponents do
   attr(:robot, :map, required: true)
   attr(:label, :string, required: true)
   attr(:position, :atom, default: :top)
+  attr(:combat_number, :integer, default: nil)
 
   def robot_status_bar(assigns) do
     total_hp = Robot.total_hp(assigns.robot)
@@ -35,6 +36,11 @@ defmodule BotgradeWeb.CombatComponents do
       @position == :top && "sticky top-0 bg-base-100 border-b-2 border-error/30",
       @position == :bottom && "sticky bottom-0 bg-base-100 border-t-2 border-primary/30"
     ]}>
+      <.link :if={@combat_number} navigate="/" class="btn btn-ghost btn-xs gap-1 text-base-content/60 hover:text-base-content shrink-0">
+        <.icon name="hero-arrow-left-mini" class="size-3.5" />
+        Menu
+      </.link>
+      <span :if={@combat_number} class="badge badge-sm badge-neutral shrink-0">Fight {@combat_number}</span>
       <div class="flex items-center gap-2 shrink-0">
         <.icon :if={@position == :top} name="hero-cpu-chip" class="size-5 text-error" />
         <.icon :if={@position == :bottom} name="hero-cpu-chip" class="size-5 text-primary" />
