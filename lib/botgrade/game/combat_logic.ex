@@ -464,7 +464,8 @@ defmodule Botgrade.Game.CombatLogic do
 
     battery_count =
       Enum.count(all_cards, fn card ->
-        card.type == :battery and card.damage != :destroyed
+        card.type == :battery and card.damage != :destroyed and
+          Map.get(card.properties, :remaining_activations, 0) > 0
       end)
 
     cpu_slots = ceil(battery_count / 2)
