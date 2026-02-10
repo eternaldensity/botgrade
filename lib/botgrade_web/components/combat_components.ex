@@ -96,11 +96,8 @@ defmodule BotgradeWeb.CombatComponents do
     ~H"""
     <div :if={@result == :ongoing} class="flex items-center justify-between px-1">
       <div class="flex items-center gap-2">
-        <span class="badge badge-lg badge-primary font-mono">
+        <span class="text-sm font-mono font-semibold text-base-content/60">
           Turn {@turn_number}
-        </span>
-        <span class="text-sm font-semibold text-base-content/80">
-          {phase_label(@phase)}
         </span>
         <span :if={@target_lock_active} class="badge badge-sm badge-warning animate-pulse">
           TARGET LOCK
@@ -964,12 +961,6 @@ defmodule BotgradeWeb.CombatComponents do
   end
 
   # --- Helper Functions ---
-
-  defp phase_label(:draw), do: "Draw"
-  defp phase_label(:power_up), do: "Power Up"
-  defp phase_label(:enemy_turn), do: "Enemy Turn"
-  defp phase_label(:scavenging), do: "Scavenging"
-  defp phase_label(:ended), do: "Combat Over"
 
   defp phase_hint(:power_up), do: "Activate batteries, then assign dice to cards"
   defp phase_hint(_), do: ""
