@@ -292,15 +292,15 @@ defmodule BotgradeWeb.CombatComponents do
         </span>
       </div>
 
-      <%!-- Used this turn indicator for weapons/armor --%>
+      <%!-- Used this turn indicator for weapons/armor/utility --%>
       <span
-        :if={@card.type in [:weapon, :armor] and not @destroyed and Map.get(@card.properties, :activated_this_turn, false) == true and not Map.has_key?(@card.properties, :max_activations_per_turn)}
+        :if={@card.type in [:weapon, :armor, :utility] and not @destroyed and Map.get(@card.properties, :activated_this_turn, false) == true and not Map.has_key?(@card.properties, :max_activations_per_turn)}
         class="text-[10px] text-base-content/50"
       >
         Used this turn
       </span>
       <span
-        :if={@card.type in [:weapon, :armor] and not @destroyed and Map.has_key?(@card.properties, :max_activations_per_turn)}
+        :if={@card.type in [:weapon, :armor, :utility] and not @destroyed and Map.has_key?(@card.properties, :max_activations_per_turn)}
         class="text-[10px] text-base-content/50"
       >
         {Map.get(@card.properties, :activations_this_turn, 0)}/{@card.properties.max_activations_per_turn} activations
@@ -699,6 +699,22 @@ defmodule BotgradeWeb.CombatComponents do
             {cpu_ability_description(@card.properties[:cpu_ability])}
           </div>
         </div>
+      <% :utility -> %>
+        <div class="space-y-0.5">
+          <div class="flex items-center gap-1">
+            <.icon name="hero-wrench-mini" class="size-3.5 text-accent" />
+            <span class="font-semibold">{utility_ability_label(@card.properties[:utility_ability])}</span>
+          </div>
+          <div class="text-[10px] text-base-content/50">
+            {utility_ability_description(@card.properties[:utility_ability])}
+          </div>
+          <div :if={has_slot_conditions?(@card)} class="text-[10px] text-base-content/50">
+            {slot_requirements_label(@card)}
+          </div>
+          <div :if={Map.has_key?(@card.properties, :max_activations_per_turn)} class="text-[10px] text-base-content/50">
+            {@card.properties.max_activations_per_turn}x per turn
+          </div>
+        </div>
     <% end %>
     """
   end
@@ -959,6 +975,7 @@ defmodule BotgradeWeb.CombatComponents do
   defp card_type_icon(:locomotion), do: "hero-arrow-trending-up"
   defp card_type_icon(:chassis), do: "hero-cube"
   defp card_type_icon(:cpu), do: "hero-cpu-chip"
+  defp card_type_icon(:utility), do: "hero-wrench"
 
   defp card_icon_color(:battery), do: "text-warning"
   defp card_icon_color(:capacitor), do: "text-info"
@@ -967,6 +984,7 @@ defmodule BotgradeWeb.CombatComponents do
   defp card_icon_color(:locomotion), do: "text-success"
   defp card_icon_color(:chassis), do: "text-base-content/50"
   defp card_icon_color(:cpu), do: "text-secondary"
+  defp card_icon_color(:utility), do: "text-accent"
 
   defp card_bg(:battery), do: "bg-gradient-to-b from-warning/10 to-transparent"
   defp card_bg(:capacitor), do: "bg-gradient-to-b from-info/10 to-transparent"
@@ -975,6 +993,7 @@ defmodule BotgradeWeb.CombatComponents do
   defp card_bg(:locomotion), do: "bg-gradient-to-b from-success/10 to-transparent"
   defp card_bg(:chassis), do: "bg-gradient-to-b from-base-300/20 to-transparent"
   defp card_bg(:cpu), do: "bg-gradient-to-b from-secondary/10 to-transparent"
+  defp card_bg(:utility), do: "bg-gradient-to-b from-accent/10 to-transparent"
 
   defp card_border(:battery), do: "border-warning/50"
   defp card_border(:capacitor), do: "border-info/50"
@@ -983,6 +1002,7 @@ defmodule BotgradeWeb.CombatComponents do
   defp card_border(:locomotion), do: "border-success/50"
   defp card_border(:chassis), do: "border-base-300"
   defp card_border(:cpu), do: "border-secondary/50"
+  defp card_border(:utility), do: "border-accent/50"
 
   defp card_badge(:battery), do: "badge-warning"
   defp card_badge(:capacitor), do: "badge-info"
@@ -991,6 +1011,7 @@ defmodule BotgradeWeb.CombatComponents do
   defp card_badge(:locomotion), do: "badge-success"
   defp card_badge(:chassis), do: "badge-ghost"
   defp card_badge(:cpu), do: "badge-secondary"
+  defp card_badge(:utility), do: "badge-accent"
 
   defp card_type_label(:battery), do: "Battery"
   defp card_type_label(:capacitor), do: "Capacitor"
@@ -999,6 +1020,7 @@ defmodule BotgradeWeb.CombatComponents do
   defp card_type_label(:locomotion), do: "Movement"
   defp card_type_label(:chassis), do: "Chassis"
   defp card_type_label(:cpu), do: "CPU"
+  defp card_type_label(:utility), do: "Utility"
 
   defp cpu_ability_label(%{type: :discard_draw, discard_count: d, draw_count: r}),
     do: "Discard #{d}, Draw #{r}"
@@ -1007,8 +1029,6 @@ defmodule BotgradeWeb.CombatComponents do
   defp cpu_ability_label(%{type: :target_lock}), do: "Target Lock"
   defp cpu_ability_label(%{type: :overclock_battery}), do: "Overclock"
   defp cpu_ability_label(%{type: :siphon_power}), do: "Siphon Power"
-  defp cpu_ability_label(%{type: :beam_split}), do: "Beam Split"
-  defp cpu_ability_label(%{type: :overcharge}), do: "Overcharge"
   defp cpu_ability_label(%{type: :extra_activation}), do: "Boost"
   defp cpu_ability_label(_), do: "Processing Unit"
 
@@ -1028,8 +1048,6 @@ defmodule BotgradeWeb.CombatComponents do
 
   defp cpu_targeting_instruction(:select_hand_cards), do: "Select cards to discard"
   defp cpu_targeting_instruction(:select_installed_card), do: "Select a card to target"
-  defp cpu_targeting_instruction(:select_die_to_split), do: "Tap a die to split"
-  defp cpu_targeting_instruction(:select_die_to_spend), do: "Tap a 3+ die to spend"
   defp cpu_targeting_instruction(_), do: ""
 
   defp cpu_targeting_label(%{type: :reflex_block}), do: "Select armor to boost (+1 shield)"
@@ -1047,6 +1065,9 @@ defmodule BotgradeWeb.CombatComponents do
   defp result_label(%{type: :damage, value: v}), do: "#{v} dmg"
   defp result_label(%{type: :plating, value: v}), do: "+#{v} plating"
   defp result_label(%{type: :shield, value: v}), do: "+#{v} shield"
+  defp result_label(%{type: :utility, ability: :beam_split}), do: "split"
+  defp result_label(%{type: :utility, ability: :overcharge}), do: "+1 dmg"
+  defp result_label(%{type: :utility}), do: "activated"
 
   defp damage_type_color(:kinetic), do: "text-amber-500"
   defp damage_type_color(:energy), do: "text-info"
@@ -1066,7 +1087,7 @@ defmodule BotgradeWeb.CombatComponents do
           not Map.get(card.properties, :activated_this_turn, false) ->
         true
 
-      card.type in [:weapon, :armor] and card_fully_activated_ui?(card) ->
+      card.type in [:weapon, :armor, :utility] and card_fully_activated_ui?(card) ->
         false
 
       card.dice_slots != [] and Enum.any?(card.dice_slots, &(&1.assigned_die == nil)) ->
@@ -1194,16 +1215,18 @@ defmodule BotgradeWeb.CombatComponents do
   defp cpu_ability_description(%{type: :siphon_power}),
     do: "Spend 2 shield to restore a battery charge"
 
-  defp cpu_ability_description(%{type: :beam_split}),
-    do: "Split a die into two halves (2 uses/turn)"
-
-  defp cpu_ability_description(%{type: :overcharge}),
-    do: "Spend a 3+ die: weapons deal +1 damage this turn"
-
   defp cpu_ability_description(%{type: :extra_activation}),
     do: "Give a used card an extra activation"
 
   defp cpu_ability_description(_), do: ""
+
+  defp utility_ability_label(:beam_split), do: "Beam Split"
+  defp utility_ability_label(:overcharge), do: "Overcharge"
+  defp utility_ability_label(_), do: "Utility"
+
+  defp utility_ability_description(:beam_split), do: "Split a die into two halves"
+  defp utility_ability_description(:overcharge), do: "Weapons deal +1 damage this turn"
+  defp utility_ability_description(_), do: ""
 
   # --- Damage Penalty Descriptions (for scavenge panel) ---
 
@@ -1219,5 +1242,6 @@ defmodule BotgradeWeb.CombatComponents do
   defp damage_penalty_description(%{type: :weapon}), do: "Damaged: total damage halved"
   defp damage_penalty_description(%{type: :armor}), do: "Damaged: total defense halved"
   defp damage_penalty_description(%{type: :cpu}), do: "Damaged: 1-in-3 chance of malfunction"
+  defp damage_penalty_description(%{type: :utility}), do: "Damaged: reduced effectiveness"
   defp damage_penalty_description(_card), do: "Damaged: reduced effectiveness"
 end

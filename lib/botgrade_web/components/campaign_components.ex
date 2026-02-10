@@ -542,6 +542,7 @@ defmodule BotgradeWeb.CampaignComponents do
   defp card_type_color(:chassis), do: "text-base-content/70"
   defp card_type_color(:cpu), do: "text-secondary"
   defp card_type_color(:locomotion), do: "text-success"
+  defp card_type_color(:utility), do: "text-accent"
 
   defp card_type_short(:weapon), do: "WPN"
   defp card_type_short(:armor), do: "ARM"
@@ -550,6 +551,7 @@ defmodule BotgradeWeb.CampaignComponents do
   defp card_type_short(:chassis), do: "CHS"
   defp card_type_short(:cpu), do: "CPU"
   defp card_type_short(:locomotion), do: "LOC"
+  defp card_type_short(:utility), do: "UTL"
 
   defp card_summary(card) do
     case card.type do
@@ -608,6 +610,9 @@ defmodule BotgradeWeb.CampaignComponents do
       :locomotion ->
         "Speed +#{Map.get(card.properties, :speed_base, 1)}"
 
+      :utility ->
+        utility_ability_summary(Map.get(card.properties, :utility_ability))
+
       _ ->
         ""
     end
@@ -651,10 +656,12 @@ defmodule BotgradeWeb.CampaignComponents do
   defp cpu_ability_summary(%{type: :target_lock}), do: "Next weapon bypasses defenses"
   defp cpu_ability_summary(%{type: :overclock_battery}), do: "Next battery activates twice"
   defp cpu_ability_summary(%{type: :siphon_power}), do: "Spend 2 shield to restore a charge"
-  defp cpu_ability_summary(%{type: :beam_split}), do: "Split a die into two halves (2x/turn)"
-  defp cpu_ability_summary(%{type: :overcharge}), do: "Spend 3+ die for +1 weapon damage"
   defp cpu_ability_summary(%{type: :extra_activation}), do: "Reactivate a used card"
   defp cpu_ability_summary(_), do: "Processing Unit"
+
+  defp utility_ability_summary(:beam_split), do: "Split a die into two halves (2x/turn)"
+  defp utility_ability_summary(:overcharge), do: "Spend 3+ die for +1 weapon damage"
+  defp utility_ability_summary(_), do: "Utility"
 
   defp scrap_label(:metal), do: "Metal"
   defp scrap_label(:wire), do: "Wire"

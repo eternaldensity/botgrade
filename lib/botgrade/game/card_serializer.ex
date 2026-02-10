@@ -58,6 +58,8 @@ defmodule Botgrade.Game.CardSerializer do
     }
   end
 
+  defp serialize_prop_value(:utility_ability, v), do: to_string(v)
+
   defp serialize_prop_value(:cpu_ability, nil), do: nil
 
   defp serialize_prop_value(:cpu_ability, ability) do
@@ -96,6 +98,8 @@ defmodule Botgrade.Game.CardSerializer do
       shield_base: dm["shield_base"]
     }
   end
+
+  defp deserialize_prop_value("utility_ability", v), do: String.to_atom(v)
 
   defp deserialize_prop_value("cpu_ability", nil), do: nil
 

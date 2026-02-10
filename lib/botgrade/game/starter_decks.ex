@@ -309,8 +309,8 @@ defmodule Botgrade.Game.StarterDecks do
         escalating: true,
         targeting: %{battery: 25, capacitor: 20, weapon: 20, cpu: 15, armor: 10, chassis: 5, locomotion: 5}
       ),
-      cpu("cpu_beam_splitter", "Beam Splitter", card_hp: 2, cpu_ability: %{type: :beam_split}, max_activations_per_turn: 2),
-      cpu("cpu_overcharge", "Overcharge Module", card_hp: 2, cpu_ability: %{type: :overcharge}),
+      utility("utl_beam_splitter", "Beam Splitter", card_hp: 2, utility_ability: :beam_split, max_activations_per_turn: 2),
+      utility("utl_overcharge", "Overcharge Module", card_hp: 2, utility_ability: :overcharge, condition: {:min, 3}),
       cpu("cpu_extra_activation", "Boost Processor", card_hp: 2, cpu_ability: %{type: :extra_activation})
     ]
   end
@@ -441,6 +441,25 @@ defmodule Botgrade.Game.StarterDecks do
       type: :cpu,
       properties: properties,
       dice_slots: []
+    }
+  end
+
+  defp utility(id, name, opts) do
+    properties =
+      %{
+        card_hp: Keyword.get(opts, :card_hp, 2),
+        utility_ability: Keyword.fetch!(opts, :utility_ability)
+      }
+      |> maybe_put(:max_activations_per_turn, Keyword.get(opts, :max_activations_per_turn))
+
+    slots = [%{id: "power_1", condition: Keyword.get(opts, :condition), assigned_die: nil}]
+
+    %Card{
+      id: id,
+      name: name,
+      type: :utility,
+      properties: properties,
+      dice_slots: slots
     }
   end
 

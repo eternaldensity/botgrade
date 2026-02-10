@@ -92,18 +92,10 @@ defmodule BotgradeWeb.CombatLive do
   def handle_event("select_die", %{"die-index" => idx}, socket) do
     index = String.to_integer(idx)
 
-    # If in CPU die selection mode, route to select_cpu_die
-    if socket.assigns.state.cpu_targeting_mode in [:select_die_to_split, :select_die_to_spend] do
-      case CombatServer.select_cpu_die(socket.assigns.combat_id, index) do
-        {:ok, _state} -> {:noreply, assign(socket, selected_die: nil, error_message: nil)}
-        {:error, reason} -> {:noreply, assign(socket, error_message: reason)}
-      end
-    else
-      selected =
-        if socket.assigns.selected_die == index, do: nil, else: index
+    selected =
+      if socket.assigns.selected_die == index, do: nil, else: index
 
-      {:noreply, assign(socket, selected_die: selected)}
-    end
+    {:noreply, assign(socket, selected_die: selected)}
   end
 
   @impl true

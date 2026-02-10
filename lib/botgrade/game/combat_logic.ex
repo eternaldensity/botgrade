@@ -196,22 +196,6 @@ defmodule Botgrade.Game.CombatLogic do
             {:ok, %{state | cpu_targeting: card.id, cpu_targeting_mode: :select_installed_card, cpu_selected_installed: nil}}
         end
 
-      :beam_split ->
-        if state.player.available_dice == [] do
-          {:error, "No dice available to split."}
-        else
-          {:ok, %{state | cpu_targeting: card.id, cpu_targeting_mode: :select_die_to_split, cpu_selected_installed: nil}}
-        end
-
-      :overcharge ->
-        valid_dice = Enum.filter(state.player.available_dice, fn d -> d.value >= 3 end)
-
-        if valid_dice == [] do
-          {:error, "No dice with value 3+ available."}
-        else
-          {:ok, %{state | cpu_targeting: card.id, cpu_targeting_mode: :select_die_to_spend, cpu_selected_installed: nil}}
-        end
-
       :extra_activation ->
         if not has_valid_extra_activation_target?(state.player) do
           {:error, "No activated cards to reactivate."}
@@ -269,7 +253,7 @@ defmodule Botgrade.Game.CombatLogic do
 
   defp has_valid_extra_activation_target?(robot) do
     Enum.any?(robot.hand, fn card ->
-      card.type in [:weapon, :armor] and card.damage != :destroyed and
+      card.type in [:weapon, :armor, :utility] and card.damage != :destroyed and
         Map.get(card.properties, :activated_this_turn, false)
     end)
   end
@@ -340,7 +324,7 @@ defmodule Botgrade.Game.CombatLogic do
   end
 
   defp valid_cpu_target?(card, %{type: :extra_activation}) do
-    card.type in [:weapon, :armor] and card.damage != :destroyed and
+    card.type in [:weapon, :armor, :utility] and card.damage != :destroyed and
       Map.get(card.properties, :activated_this_turn, false)
   end
 
@@ -385,9 +369,6 @@ defmodule Botgrade.Game.CombatLogic do
         else
           {:ok, execute_cpu_ability(state, cpu_card, ability, :player, state.cpu_selected_installed)}
         end
-
-      type when type in [:beam_split, :overcharge] ->
-        {:error, "Select a die from the dice pool."}
     end
   end
 
@@ -401,27 +382,6 @@ defmodule Botgrade.Game.CombatLogic do
 
   def cancel_cpu_ability(_state), do: {:error, "Not in CPU targeting mode."}
 
-  @spec select_cpu_die(CombatState.t(), non_neg_integer()) :: {:ok, CombatState.t()} | {:error, String.t()}
-  def select_cpu_die(%CombatState{phase: :power_up, cpu_targeting: cpu_id, cpu_targeting_mode: mode} = state, die_index)
-      when not is_nil(cpu_id) and mode in [:select_die_to_split, :select_die_to_spend] do
-    cpu_card = find_installed_card(state.player, cpu_id)
-    ability = cpu_card.properties.cpu_ability
-    die = Enum.at(state.player.available_dice, die_index)
-
-    cond do
-      is_nil(die) ->
-        {:error, "Invalid die index."}
-
-      ability.type == :overcharge and die.value < 3 ->
-        {:error, "Die must be 3 or higher."}
-
-      true ->
-        {:ok, execute_cpu_ability(state, cpu_card, ability, :player, die_index)}
-    end
-  end
-
-  def select_cpu_die(_state, _die_index), do: {:error, "Not in die selection mode."}
-
   # --- Dice Allocation (available during :power_up, with immediate activation) ---
 
   @spec allocate_die(CombatState.t(), non_neg_integer(), String.t(), String.t()) ::
@@ -433,7 +393,7 @@ defmodule Botgrade.Game.CombatLogic do
          {:card, card} when not is_nil(card) <- {:card, find_card_in_hand(player, card_id)},
          true <- card.damage != :destroyed || {:error, "Card is destroyed."},
          true <-
-           not (card.type in [:weapon, :armor] and card_fully_activated?(card)) ||
+           not (card.type in [:weapon, :armor, :utility] and card_fully_activated?(card)) ||
              {:error, "Card already activated this turn."},
          {:slot, slot_idx, slot} when not is_nil(slot) <- find_slot(card, slot_id),
          true <- is_nil(slot.assigned_die) || {:error, "Slot already has a die."},
@@ -452,8 +412,8 @@ defmodule Botgrade.Game.CombatLogic do
 
       state = %{state | player: player}
 
-      # Immediate activation: when all slots filled on a weapon/armor, fire it now
-      if all_slots_filled?(updated_card) and updated_card.type in [:weapon, :armor] do
+      # Immediate activation: when all slots filled on a weapon/armor/utility, fire it now
+      if all_slots_filled?(updated_card) and updated_card.type in [:weapon, :armor, :utility] do
         state =
           state
           |> activate_card(updated_card, :player)
@@ -567,7 +527,7 @@ defmodule Botgrade.Game.CombatLogic do
     {state, cpu_events} = ai_use_cpu_ability_with_events(state, :post_battery, 600)
     events = events ++ cpu_events
 
-    # Dice allocation (single event)
+    # Dice allocation: utilities first, then weapons/armor
     state = ai_allocate_dice(state)
     events = events ++ [{state, 400}]
 
@@ -820,6 +780,7 @@ defmodule Botgrade.Game.CombatLogic do
     case card.type do
       :weapon -> activate_weapon(state, card, who)
       :armor -> activate_armor(state, card, who)
+      :utility -> activate_utility(state, card, who)
       _ -> state
     end
   end
@@ -1021,6 +982,47 @@ defmodule Botgrade.Game.CombatLogic do
     add_log(state, log_msg)
   end
 
+  defp activate_utility(state, utility_card, who) do
+    {combatant, _} = get_combatants(state, who)
+    who_name = if who == :player, do: "You", else: "Enemy"
+    ability = utility_card.properties.utility_ability
+
+    die = hd(Enum.filter(utility_card.dice_slots, &(&1.assigned_die != nil))).assigned_die
+
+    {state, combatant, log_msg} =
+      case ability do
+        :beam_split ->
+          half_a = ceil(die.value / 2)
+          half_b = floor(die.value / 2)
+
+          new_dice = [
+            %{sides: die.sides, value: max(1, half_a)},
+            %{sides: die.sides, value: max(1, half_b)}
+          ]
+
+          combatant = %{combatant | available_dice: combatant.available_dice ++ new_dice}
+          {state, combatant, "#{who_name} activates #{utility_card.name}: Split [#{die.value}] into [#{half_a}] and [#{half_b}]."}
+
+        :overcharge ->
+          state = %{state | overcharge_bonus: state.overcharge_bonus + 1}
+          {state, combatant, "#{who_name} activates #{utility_card.name}: Spent [#{die.value}] for +1 weapon damage this turn!"}
+      end
+
+    result_card =
+      utility_card
+      |> clear_card_slots()
+      |> Map.put(:last_result, %{type: :utility, ability: ability, dice: [die]})
+
+    combatant = mark_card_activated_in_hand(combatant, utility_card.id, result_card)
+
+    state =
+      if who == :player,
+        do: %{state | player: combatant},
+        else: %{state | enemy: combatant}
+
+    add_log(state, log_msg)
+  end
+
   # --- Resolution helpers (used by enemy turn batch resolution) ---
 
   defp resolve_weapons(state, who) do
@@ -1197,9 +1199,10 @@ defmodule Botgrade.Game.CombatLogic do
         props = Map.delete(props, :activations_this_turn)
 
         props =
-          if card.type == :armor,
-            do: Map.delete(props, :shield_base_bonus),
-            else: props
+          cond do
+            card.type == :armor -> Map.delete(props, :shield_base_bonus)
+            true -> props
+          end
 
         %{card | properties: props}
       end)
@@ -1529,43 +1532,6 @@ defmodule Botgrade.Game.CombatLogic do
     add_log(state, "#{who_name} activates #{cpu_card.name}: Siphoned 2 shield to restore #{target_card.name}.")
   end
 
-  defp execute_cpu_ability(state, cpu_card, %{type: :beam_split}, who, die_index) do
-    {combatant, _} = get_combatants(state, who)
-    who_name = if who == :player, do: "You", else: "Enemy"
-
-    die = Enum.at(combatant.available_dice, die_index)
-    half_a = ceil(die.value / 2)
-    half_b = floor(die.value / 2)
-
-    new_dice = [
-      %{sides: die.sides, value: max(1, half_a)},
-      %{sides: die.sides, value: max(1, half_b)}
-    ]
-
-    remaining_dice = List.delete_at(combatant.available_dice, die_index)
-    combatant = %{combatant | available_dice: remaining_dice ++ new_dice}
-
-    combatant = mark_cpu_activated(combatant, cpu_card)
-    state = set_combatant(state, who, combatant)
-    state = if who == :player, do: clear_cpu_targeting_state(state), else: state
-    add_log(state, "#{who_name} activates #{cpu_card.name}: Split [#{die.value}] into [#{half_a}] and [#{half_b}].")
-  end
-
-  defp execute_cpu_ability(state, cpu_card, %{type: :overcharge}, who, die_index) do
-    {combatant, _} = get_combatants(state, who)
-    who_name = if who == :player, do: "You", else: "Enemy"
-
-    die = Enum.at(combatant.available_dice, die_index)
-    remaining_dice = List.delete_at(combatant.available_dice, die_index)
-    combatant = %{combatant | available_dice: remaining_dice}
-
-    combatant = mark_cpu_activated(combatant, cpu_card)
-    state = set_combatant(state, who, combatant)
-    state = %{state | overcharge_bonus: state.overcharge_bonus + 1}
-    state = if who == :player, do: clear_cpu_targeting_state(state), else: state
-    add_log(state, "#{who_name} activates #{cpu_card.name}: Spent [#{die.value}] for +1 weapon damage this turn!")
-  end
-
   defp execute_cpu_ability(state, cpu_card, %{type: :extra_activation}, who, target_card_id) do
     {combatant, _} = get_combatants(state, who)
     who_name = if who == :player, do: "You", else: "Enemy"
@@ -1754,6 +1720,11 @@ defmodule Botgrade.Game.CombatLogic do
   end
 
   defp ai_allocate_dice(state) do
+    # Phase 1: Allocate dice to utility cards first and activate them
+    # (beam_split creates more dice, overcharge boosts damage)
+    state = ai_allocate_and_activate_utilities(state)
+
+    # Phase 2: Allocate remaining dice to weapons and armor
     enemy = state.enemy
     sorted_dice = Enum.sort_by(enemy.available_dice, & &1.value, :desc)
 
@@ -1765,13 +1736,55 @@ defmodule Botgrade.Game.CombatLogic do
       enemy.hand
       |> Enum.filter(&(&1.type == :armor and &1.damage != :destroyed))
 
-    # Assign highest dice to weapons first, then armor
     {enemy, remaining_dice, log_entries} =
       assign_dice_to_cards(enemy, sorted_dice, weapons ++ armor_cards)
 
     enemy = %{enemy | available_dice: remaining_dice}
     state = %{state | enemy: enemy}
     Enum.reduce(log_entries, state, fn msg, s -> add_log(s, msg) end)
+  end
+
+  defp ai_allocate_and_activate_utilities(state) do
+    utility_cards =
+      state.enemy.hand
+      |> Enum.filter(&(&1.type == :utility and &1.damage != :destroyed and not card_fully_activated?(&1)))
+
+    Enum.reduce(utility_cards, state, fn util_card, acc_state ->
+      # Try to assign a die to the utility card's slot
+      enemy = acc_state.enemy
+      slot = hd(util_card.dice_slots)
+
+      best_die =
+        if util_card.properties.utility_ability == :overcharge do
+          # For overcharge, pick the lowest valid die (3+)
+          enemy.available_dice
+          |> Enum.with_index()
+          |> Enum.filter(fn {d, _} -> Card.meets_condition?(slot.condition, d.value) end)
+          |> Enum.sort_by(fn {d, _} -> d.value end)
+          |> List.first()
+        else
+          # For beam_split, pick the highest die to get the most value
+          enemy.available_dice
+          |> Enum.with_index()
+          |> Enum.filter(fn {d, _} -> Card.meets_condition?(slot.condition, d.value) end)
+          |> Enum.sort_by(fn {d, _} -> d.value end, :desc)
+          |> List.first()
+        end
+
+      case best_die do
+        nil -> acc_state
+        {die, die_idx} ->
+          # Assign die to slot
+          updated_slot = %{slot | assigned_die: die}
+          updated_card = %{util_card | dice_slots: [updated_slot]}
+          enemy = %{enemy | hand: replace_card(enemy.hand, util_card.id, updated_card), available_dice: List.delete_at(enemy.available_dice, die_idx)}
+          acc_state = %{acc_state | enemy: enemy}
+          acc_state = add_log(acc_state, "Enemy assigns die [#{die.value}] to #{util_card.name}.")
+
+          # Activate the utility
+          activate_utility(acc_state, updated_card, :enemy)
+      end
+    end)
   end
 
   defp assign_dice_to_cards(robot, dice, cards) do
@@ -1934,44 +1947,12 @@ defmodule Botgrade.Game.CombatLogic do
     end
   end
 
-  defp ai_execute_cpu_ability(state, cpu_card, %{type: :beam_split} = ability) do
-    # AI picks the highest value die to split
-    dice = state.enemy.available_dice
-
-    if dice != [] do
-      {_die, idx} =
-        dice
-        |> Enum.with_index()
-        |> Enum.max_by(fn {d, _} -> d.value end)
-
-      execute_cpu_ability(state, cpu_card, ability, :enemy, idx)
-    else
-      state
-    end
-  end
-
-  defp ai_execute_cpu_ability(state, cpu_card, %{type: :overcharge} = ability) do
-    # AI picks the lowest die that meets the 3+ threshold
-    eligible =
-      state.enemy.available_dice
-      |> Enum.with_index()
-      |> Enum.filter(fn {d, _} -> d.value >= 3 end)
-      |> Enum.sort_by(fn {d, _} -> d.value end)
-
-    case eligible do
-      [{_die, idx} | _] ->
-        execute_cpu_ability(state, cpu_card, ability, :enemy, idx)
-      [] ->
-        state
-    end
-  end
-
   defp ai_execute_cpu_ability(state, cpu_card, %{type: :extra_activation} = ability) do
-    # AI picks the best activated weapon/armor to reactivate
+    # AI picks the best activated weapon/armor/utility to reactivate
     best_target =
       state.enemy.hand
       |> Enum.filter(fn card ->
-        card.type in [:weapon, :armor] and card.damage != :destroyed and
+        card.type in [:weapon, :armor, :utility] and card.damage != :destroyed and
           Map.get(card.properties, :activated_this_turn, false)
       end)
       |> Enum.sort_by(fn card ->

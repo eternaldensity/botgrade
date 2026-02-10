@@ -37,7 +37,8 @@ defmodule Botgrade.Game.Robot do
     armor: 3,
     battery: 2,
     capacitor: 2,
-    locomotion: 2
+    locomotion: 2,
+    utility: 2
   }
 
   @spec new(String.t(), String.t(), [Card.t()]) :: t()

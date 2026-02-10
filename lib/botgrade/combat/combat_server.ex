@@ -30,9 +30,6 @@ defmodule Botgrade.Combat.CombatServer do
   def cancel_cpu_ability(combat_id),
     do: GenServer.call(via(combat_id), :cancel_cpu_ability)
 
-  def select_cpu_die(combat_id, die_index),
-    do: GenServer.call(via(combat_id), {:select_cpu_die, die_index})
-
   def allocate_die(combat_id, die_index, card_id, slot_id),
     do: GenServer.call(via(combat_id), {:allocate_die, die_index, card_id, slot_id})
 
@@ -132,18 +129,6 @@ defmodule Botgrade.Combat.CombatServer do
   @impl true
   def handle_call(:cancel_cpu_ability, _from, state) do
     case CombatLogic.cancel_cpu_ability(state) do
-      {:ok, new_state} ->
-        broadcast(new_state)
-        {:reply, {:ok, new_state}, new_state}
-
-      {:error, reason} ->
-        {:reply, {:error, reason}, state}
-    end
-  end
-
-  @impl true
-  def handle_call({:select_cpu_die, die_index}, _from, state) do
-    case CombatLogic.select_cpu_die(state, die_index) do
       {:ok, new_state} ->
         broadcast(new_state)
         {:reply, {:ok, new_state}, new_state}

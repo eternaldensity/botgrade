@@ -1,5 +1,5 @@
 defmodule Botgrade.Game.Card do
-  @type card_type :: :battery | :capacitor | :weapon | :armor | :locomotion | :chassis | :cpu
+  @type card_type :: :battery | :capacitor | :weapon | :armor | :locomotion | :chassis | :cpu | :utility
 
   @type dice_condition ::
           {:min, pos_integer()}

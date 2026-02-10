@@ -23,7 +23,7 @@ defmodule Botgrade.Game.CombatState do
           scavenge_scraps: map(),
           cpu_targeting: String.t() | nil,
           cpu_discard_selected: [String.t()],
-          cpu_targeting_mode: :select_hand_cards | :select_installed_card | :select_die_to_split | :select_die_to_spend | nil,
+          cpu_targeting_mode: :select_hand_cards | :select_installed_card | nil,
           cpu_selected_installed: String.t() | nil,
           target_lock_active: boolean(),
           overclock_active: boolean(),
