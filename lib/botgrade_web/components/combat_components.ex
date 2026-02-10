@@ -619,11 +619,14 @@ defmodule BotgradeWeb.CombatComponents do
     <%= case @card.type do %>
       <% :battery -> %>
         <div class="flex items-center gap-2">
-          <%= if @card.damage == :damaged do %>
+          <%= if @card.damage == :damaged and @card.properties.dice_count > 1 do %>
             <span class="line-through text-base-content/40 font-mono">{@card.properties.dice_count}d{@card.properties.die_sides}</span>
-            <span class="text-warning font-mono">{max(@card.properties.dice_count - 1, 1)}d{@card.properties.die_sides}</span>
+            <span class="text-warning font-mono">{@card.properties.dice_count - 1}d{@card.properties.die_sides}</span>
           <% else %>
             <span class="font-mono">{@card.properties.dice_count}d{@card.properties.die_sides}</span>
+            <span :if={@card.damage == :damaged and @card.properties.dice_count == 1} class="text-warning text-[10px]">
+              (max {@card.properties.die_sides - 2})
+            </span>
           <% end %>
           <span class="text-base-content/50">|</span>
           <.charge_dots
