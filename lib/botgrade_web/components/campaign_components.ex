@@ -6,6 +6,14 @@ defmodule BotgradeWeb.CampaignComponents do
   use Phoenix.Component
   import BotgradeWeb.CoreComponents, only: [icon: 1]
 
+  @access_colors %{
+    "vermilion" => "#e34234",
+    "cerulean" => "#007ba7",
+    "amaranth" => "#e52b50",
+    "chartreuse" => "#7fff00",
+    "puce" => "#cc8899"
+  }
+
   # --- Tile Detail Map (primary gameplay view) ---
 
   attr :spaces, :map, required: true
@@ -14,6 +22,7 @@ defmodule BotgradeWeb.CampaignComponents do
   attr :current_space_id, :string, required: true
   attr :visited_spaces, :list, required: true
   attr :movement_points, :integer, required: true
+  attr :access_cards, :list, default: []
 
   def tile_detail_map(assigns) do
     current_space = Map.get(assigns.spaces, assigns.current_space_id)
@@ -22,7 +31,13 @@ defmodule BotgradeWeb.CampaignComponents do
 
     reachable_ids =
       if current_space && assigns.movement_points > 0 do
-        MapSet.new(current_space.connections)
+        current_space.connections
+        |> Enum.reject(fn conn_id ->
+          conn_space = Map.get(assigns.spaces, conn_id)
+          conn_space && conn_space.access_level &&
+            conn_space.access_level not in assigns.access_cards
+        end)
+        |> MapSet.new()
       else
         MapSet.new()
       end
@@ -166,6 +181,8 @@ defmodule BotgradeWeb.CampaignComponents do
         <g :for={space <- @adjacent_spaces}>
           <% {sx, sy} = space.position %>
           <% is_reachable = MapSet.member?(@reachable_ids, space.id) %>
+          <% is_gate = space.access_level != nil %>
+          <% is_locked_gate = is_gate and space.access_level not in @access_cards %>
 
           <%!-- Reachable highlight for cross-tile spaces --%>
           <circle
@@ -182,14 +199,31 @@ defmodule BotgradeWeb.CampaignComponents do
             <animate attributeName="stroke-dashoffset" values="0;14" dur="1.5s" repeatCount="indefinite" />
           </circle>
 
+          <%!-- Locked gate indicator for adjacent spaces --%>
+          <circle
+            :if={is_locked_gate and not is_reachable}
+            cx={sx}
+            cy={sy}
+            r="14"
+            fill="none"
+            stroke={access_color(space.access_level)}
+            stroke-width="1.5"
+            stroke-dasharray="4,3"
+            opacity="0.5"
+          />
+
           <circle
             cx={sx}
             cy={sy}
             r={if is_reachable, do: "12", else: "10"}
-            fill={space_fill(space.type, space.cleared)}
-            stroke={space_stroke(space.type, false)}
+            fill={if is_gate, do: access_color(space.access_level), else: space_fill(space.type, space.cleared)}
+            stroke={if is_gate, do: access_color(space.access_level), else: space_stroke(space.type, false)}
             stroke-width="1"
-            opacity={if is_reachable, do: "0.8", else: "0.25"}
+            opacity={cond do
+              is_locked_gate -> "0.5"
+              is_reachable -> "0.8"
+              true -> "0.25"
+            end}
             class={if is_reachable, do: "cursor-pointer", else: ""}
             phx-click={if is_reachable, do: "move_to_space"}
             phx-value-space-id={if is_reachable, do: space.id}
@@ -201,17 +235,21 @@ defmodule BotgradeWeb.CampaignComponents do
             font-size="10"
             fill="white"
             pointer-events="none"
-            opacity={if is_reachable, do: "0.9", else: "0.25"}
+            opacity={cond do
+              is_locked_gate -> "0.5"
+              is_reachable -> "0.9"
+              true -> "0.25"
+            end}
           >
-            {space_icon(space.type)}
+            {if is_gate, do: (if is_locked_gate, do: "\u{1F512}", else: "\u{1F513}"), else: space_icon(space.type)}
           </text>
           <text
-            :if={is_reachable}
+            :if={is_reachable or is_gate}
             x={sx}
             y={sy + 22}
             text-anchor="middle"
             font-size="7"
-            fill="currentColor"
+            fill={if is_gate, do: access_color(space.access_level), else: "currentColor"}
             opacity="0.6"
             pointer-events="none"
           >
@@ -224,6 +262,9 @@ defmodule BotgradeWeb.CampaignComponents do
           <% {sx, sy} = space.position %>
           <% is_current = space.id == @current_space_id %>
           <% is_reachable = MapSet.member?(@reachable_ids, space.id) %>
+          <% is_gate = space.access_level != nil %>
+          <% gate_unlocked = is_gate and space.access_level in @access_cards %>
+          <% is_locked_gate = is_gate and not gate_unlocked %>
 
           <%!-- Current space pulsing ring --%>
           <circle
@@ -256,21 +297,40 @@ defmodule BotgradeWeb.CampaignComponents do
             <animate attributeName="stroke-dashoffset" values="0;14" dur="1.5s" repeatCount="indefinite" />
           </circle>
 
+          <%!-- Locked gate pulsing ring --%>
+          <circle
+            :if={is_locked_gate and not is_current}
+            cx={sx}
+            cy={sy}
+            r="18"
+            fill="none"
+            stroke={access_color(space.access_level)}
+            stroke-width="2"
+            stroke-dasharray="6,3"
+            opacity="0.5"
+          >
+            <animate attributeName="opacity" values="0.3;0.6;0.3" dur="2s" repeatCount="indefinite" />
+          </circle>
+
           <%!-- Space circle --%>
           <circle
             cx={sx}
             cy={sy}
             r="14"
-            fill={space_fill(space.type, space.cleared)}
-            stroke={space_stroke(space.type, is_current)}
+            fill={if is_gate, do: access_color(space.access_level), else: space_fill(space.type, space.cleared)}
+            stroke={if is_gate, do: access_color(space.access_level), else: space_stroke(space.type, is_current)}
             stroke-width={if is_current, do: "3", else: "2"}
-            opacity={if space.cleared and not is_current, do: "0.5", else: "1"}
+            opacity={cond do
+              is_locked_gate -> "0.8"
+              space.cleared and not is_current -> "0.5"
+              true -> "1"
+            end}
             class={if is_reachable, do: "cursor-pointer", else: ""}
             phx-click={if is_reachable, do: "move_to_space"}
             phx-value-space-id={if is_reachable, do: space.id}
           />
 
-          <%!-- Space icon --%>
+          <%!-- Space icon (lock for gates) --%>
           <text
             x={sx}
             y={sy + 4}
@@ -280,7 +340,11 @@ defmodule BotgradeWeb.CampaignComponents do
             pointer-events="none"
             opacity={if space.cleared and not is_current, do: "0.5", else: "1"}
           >
-            {space_icon(space.type)}
+            {cond do
+              is_locked_gate -> "\u{1F512}"
+              gate_unlocked -> "\u{1F513}"
+              true -> space_icon(space.type)
+            end}
           </text>
 
           <%!-- Space label --%>
@@ -289,12 +353,39 @@ defmodule BotgradeWeb.CampaignComponents do
             y={sy + 26}
             text-anchor="middle"
             font-size="8"
-            fill="currentColor"
-            opacity={if is_reachable, do: "0.8", else: "0.45"}
+            fill={if is_gate, do: access_color(space.access_level), else: "currentColor"}
+            opacity={cond do
+              is_gate -> "0.9"
+              is_reachable -> "0.8"
+              true -> "0.45"
+            end}
             pointer-events="none"
           >
             {space.label}
           </text>
+
+          <%!-- KEY badge for access card holders --%>
+          <g :if={space.holds_access_card && !space.cleared} pointer-events="none">
+            <rect
+              x={sx - 12}
+              y={sy + 14}
+              width="24"
+              height="10"
+              rx="3"
+              fill={access_color(space.holds_access_card)}
+              opacity="0.85"
+            />
+            <text
+              x={sx}
+              y={sy + 22}
+              text-anchor="middle"
+              font-size="6"
+              fill="white"
+              font-weight="bold"
+            >
+              KEY
+            </text>
+          </g>
 
           <%!-- Danger indicator for enemy spaces (roman numeral style: V = 5) --%>
           <g :if={space.type == :enemy and not space.cleared} pointer-events="none">
@@ -347,6 +438,7 @@ defmodule BotgradeWeb.CampaignComponents do
   attr :current_zone_id, :string, required: true
   attr :visited_spaces, :list, required: true
   attr :spaces, :map, required: true
+  attr :access_cards, :list, default: []
 
   def zone_overview_map(assigns) do
     zone_list = Map.values(assigns.zones) |> Enum.sort_by(fn z -> z.grid_pos end)
@@ -361,27 +453,77 @@ defmodule BotgradeWeb.CampaignComponents do
       |> Enum.reject(&is_nil/1)
       |> MapSet.new()
 
+    # Find gated zone pairs: for each gated edge connector, find which zones it connects
+    # Edge connectors have cross-zone connections, so check connections for zone_id differences
+    gated_zone_pairs =
+      assigns.spaces
+      |> Map.values()
+      |> Enum.filter(&(&1.access_level && &1.type == :edge_connector))
+      |> Enum.flat_map(fn space ->
+        space.connections
+        |> Enum.map(fn conn_id -> Map.get(assigns.spaces, conn_id) end)
+        |> Enum.reject(&is_nil/1)
+        |> Enum.filter(&(&1.zone_id != space.zone_id))
+        |> Enum.map(fn other ->
+          pair = if space.zone_id < other.zone_id, do: {space.zone_id, other.zone_id}, else: {other.zone_id, space.zone_id}
+          {pair, space.access_level}
+        end)
+      end)
+      |> Enum.uniq()
+      |> Map.new()
+
     assigns =
       assigns
       |> assign(:zone_list, zone_list)
       |> assign(:visited_zone_ids, visited_zone_ids)
+      |> assign(:gated_zone_pairs, gated_zone_pairs)
 
     ~H"""
     <div class="w-full overflow-x-auto">
       <svg viewBox="0 0 1960 980" class="w-full h-auto min-w-[400px]" style="max-height: 70vh">
         <%!-- Zone neighbor connections --%>
         <g :for={zone <- @zone_list}>
-          <line
-            :for={neighbor_id <- zone.neighbors}
-            :if={neighbor_id > zone.id}
-            x1={zone_center_x(zone)}
-            y1={zone_center_y(zone)}
-            x2={zone_center_x(Map.get(@zones, neighbor_id))}
-            y2={zone_center_y(Map.get(@zones, neighbor_id))}
-            stroke="#6b7280"
-            stroke-width="2"
-            opacity="0.3"
-          />
+          <%= for neighbor_id <- zone.neighbors, neighbor_id > zone.id do %>
+            <% neighbor = Map.get(@zones, neighbor_id) %>
+            <% pair_key = if zone.id < neighbor_id, do: {zone.id, neighbor_id}, else: {neighbor_id, zone.id} %>
+            <% gate_level = Map.get(@gated_zone_pairs, pair_key) %>
+            <line
+              x1={zone_center_x(zone)}
+              y1={zone_center_y(zone)}
+              x2={zone_center_x(neighbor)}
+              y2={zone_center_y(neighbor)}
+              stroke={if gate_level, do: access_color(gate_level), else: "#6b7280"}
+              stroke-width={if gate_level, do: "3", else: "2"}
+              opacity={if gate_level, do: "0.6", else: "0.3"}
+            />
+            <%!-- Gate marker at midpoint --%>
+            <%= if gate_level do %>
+              <% mx = div(zone_center_x(zone) + zone_center_x(neighbor), 2) %>
+              <% my = div(zone_center_y(zone) + zone_center_y(neighbor), 2) %>
+              <% unlocked = gate_level in @access_cards %>
+              <rect
+                x={mx - 12}
+                y={my - 10}
+                width="24"
+                height="20"
+                rx="4"
+                fill={access_color(gate_level)}
+                opacity={if unlocked, do: "0.4", else: "0.8"}
+                stroke="white"
+                stroke-width="1"
+              />
+              <text
+                x={mx}
+                y={my + 4}
+                text-anchor="middle"
+                font-size="12"
+                fill="white"
+                pointer-events="none"
+              >
+                {if unlocked, do: "\u{1F513}", else: "\u{1F512}"}
+              </text>
+            <% end %>
+          <% end %>
         </g>
 
         <%!-- Zone rectangles --%>
@@ -538,6 +680,7 @@ defmodule BotgradeWeb.CampaignComponents do
 
   attr :player_cards, :list, required: true
   attr :player_resources, :map, required: true
+  attr :access_cards, :list, default: []
 
   def campaign_player_status(assigns) do
     card_counts =
@@ -581,6 +724,17 @@ defmodule BotgradeWeb.CampaignComponents do
           </span>
           <span :if={Enum.all?(@player_resources, fn {_, v} -> v == 0 end)} class="text-base-content/40">
             No resources
+          </span>
+        </div>
+
+        <div :if={@access_cards != []} class="flex flex-wrap gap-1.5 text-xs mt-1 border-t border-base-300 pt-2">
+          <span class="text-base-content/60 font-semibold">Keys:</span>
+          <span
+            :for={level <- @access_cards}
+            class="badge badge-sm text-white border-0"
+            style={"background-color: #{access_color(level)};"}
+          >
+            {String.capitalize(level)}
           </span>
         </div>
       </div>
@@ -1344,5 +1498,9 @@ defmodule BotgradeWeb.CampaignComponents do
     idx = :erlang.phash2(space.id, length(@events))
     {_text, _reward_label, resources} = Enum.at(@events, idx)
     resources
+  end
+
+  defp access_color(level) do
+    Map.get(@access_colors, level, "#6b7280")
   end
 end

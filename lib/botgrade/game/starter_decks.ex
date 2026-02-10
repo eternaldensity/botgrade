@@ -721,6 +721,23 @@ defmodule Botgrade.Game.StarterDecks do
 
   def danger_bonus_cards(_danger_rating, _enemy_type), do: []
 
+  @doc """
+  Returns bonus cards for an enemy guarding an access card.
+  One extra card from the enemy's own deck, one from the expanded pool.
+  """
+  def access_card_holder_bonus(enemy_type) do
+    own_card = Enum.random(enemy_deck(enemy_type))
+    pool_card = Enum.random(expanded_card_pool())
+
+    suffix1 = Base.encode16(:crypto.strong_rand_bytes(3), case: :lower)
+    suffix2 = Base.encode16(:crypto.strong_rand_bytes(3), case: :lower)
+
+    [
+      %{own_card | id: "gate_own_#{suffix1}"},
+      %{pool_card | id: "gate_pool_#{suffix2}"}
+    ]
+  end
+
   defp maybe_put(map, _key, nil), do: map
   defp maybe_put(map, key, value), do: Map.put(map, key, value)
 end

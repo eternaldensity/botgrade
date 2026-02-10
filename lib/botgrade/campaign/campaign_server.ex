@@ -90,6 +90,10 @@ defmodule Botgrade.Campaign.CampaignServer do
       space_id not in current_space.connections ->
         {:reply, {:error, "Cannot move to that space"}, state, @idle_timeout}
 
+      gate_blocked?(state, space_id) ->
+        target = Map.fetch!(state.spaces, space_id)
+        {:reply, {:error, "Locked: #{String.capitalize(target.access_level)} access card required"}, state, @idle_timeout}
+
       true ->
         target_space = Map.fetch!(state.spaces, space_id)
 
@@ -100,9 +104,9 @@ defmodule Botgrade.Campaign.CampaignServer do
         }
 
         case check_space_encounter(target_space) do
-          {:combat, enemy_type} ->
+          {:combat, _enemy_type} ->
             combat_id = Base.encode16(:crypto.strong_rand_bytes(4), case: :lower)
-            enemy_cards = enemy_deck_for_type(enemy_type, target_space.danger_rating)
+            enemy_cards = enemy_deck_for_space(target_space)
 
             {:ok, _pid} =
               CombatSupervisor.start_combat(combat_id,
@@ -149,14 +153,34 @@ defmodule Botgrade.Campaign.CampaignServer do
 
     updated_tiles = sync_tiles_from_spaces(state.tiles, updated_spaces)
 
+    # Check for access card pickup
+    current_space = Map.fetch!(state.spaces, state.current_space_id)
+
+    new_access_cards =
+      if result == :player_wins and current_space.holds_access_card do
+        Enum.uniq([current_space.holds_access_card | state.access_cards])
+      else
+        state.access_cards
+      end
+
     new_state = %{state |
       spaces: updated_spaces,
       tiles: updated_tiles,
       player_cards: player_cards,
       player_resources: player_resources,
       combat_id: nil,
-      movement_points: 0
+      movement_points: 0,
+      access_cards: new_access_cards
     }
+
+    # Broadcast access card acquisition
+    if result == :player_wins and current_space.holds_access_card do
+      Phoenix.PubSub.broadcast(
+        Botgrade.PubSub,
+        "campaign:#{state.id}",
+        {:access_card_acquired, current_space.holds_access_card}
+      )
+    end
 
     new_state = advance_turn(new_state)
     auto_save(new_state)
@@ -456,6 +480,7 @@ defmodule Botgrade.Campaign.CampaignServer do
       movement_points: movement_points,
       max_movement_points: movement_points,
       turn_number: 1,
+      access_cards: [],
       created_at: DateTime.utc_now() |> DateTime.to_iso8601()
     }
   end
@@ -474,8 +499,23 @@ defmodule Botgrade.Campaign.CampaignServer do
     end
   end
 
-  defp enemy_deck_for_type(enemy_type, danger_rating) do
-    StarterDecks.enemy_deck(enemy_type) ++ StarterDecks.danger_bonus_cards(danger_rating, enemy_type)
+  defp enemy_deck_for_space(space) do
+    base = StarterDecks.enemy_deck(space.enemy_type)
+    danger_bonus = StarterDecks.danger_bonus_cards(space.danger_rating, space.enemy_type)
+
+    gate_bonus =
+      if space.holds_access_card do
+        StarterDecks.access_card_holder_bonus(space.enemy_type)
+      else
+        []
+      end
+
+    base ++ danger_bonus ++ gate_bonus
+  end
+
+  defp gate_blocked?(state, space_id) do
+    space = Map.fetch!(state.spaces, space_id)
+    space.access_level != nil and space.access_level not in state.access_cards
   end
 
   defp advance_turn(state) do

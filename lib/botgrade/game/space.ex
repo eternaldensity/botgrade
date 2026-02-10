@@ -20,7 +20,9 @@ defmodule Botgrade.Game.Space do
           enemy_patrol_path: [String.t()],
           encounter_range: non_neg_integer(),
           danger_rating: pos_integer(),
-          cleared: boolean()
+          cleared: boolean(),
+          access_level: String.t() | nil,
+          holds_access_card: String.t() | nil
         }
 
   @enforce_keys [:id, :type, :position, :zone_id]
@@ -36,6 +38,8 @@ defmodule Botgrade.Game.Space do
     enemy_patrol_path: [],
     encounter_range: 1,
     danger_rating: 1,
-    cleared: false
+    cleared: false,
+    access_level: nil,
+    holds_access_card: nil
   ]
 end

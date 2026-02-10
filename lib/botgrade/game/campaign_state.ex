@@ -15,6 +15,7 @@ defmodule Botgrade.Game.CampaignState do
           movement_points: non_neg_integer(),
           max_movement_points: non_neg_integer(),
           turn_number: pos_integer(),
+          access_cards: [String.t()],
           created_at: String.t() | nil,
           updated_at: String.t() | nil
         }
@@ -34,6 +35,7 @@ defmodule Botgrade.Game.CampaignState do
     movement_points: 1,
     max_movement_points: 1,
     turn_number: 1,
+    access_cards: [],
     created_at: nil,
     updated_at: nil
   ]

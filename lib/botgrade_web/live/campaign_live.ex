@@ -60,6 +60,12 @@ defmodule BotgradeWeb.CampaignLive do
     {:noreply, assign(socket, info_message: msg)}
   end
 
+  @impl true
+  def handle_info({:access_card_acquired, level}, socket) do
+    msg = "Access card acquired: #{String.capitalize(level)}!"
+    {:noreply, assign(socket, info_message: msg)}
+  end
+
   # --- Player Actions ---
 
   @impl true
@@ -344,6 +350,7 @@ defmodule BotgradeWeb.CampaignLive do
               current_space_id={@state.current_space_id}
               visited_spaces={@state.visited_spaces}
               movement_points={@state.movement_points}
+              access_cards={@state.access_cards}
             />
 
             <%!-- Current space detail --%>
@@ -357,6 +364,7 @@ defmodule BotgradeWeb.CampaignLive do
             <.campaign_player_status
               player_cards={@state.player_cards}
               player_resources={@state.player_resources}
+              access_cards={@state.access_cards}
             />
 
           <% :zone_overview -> %>
@@ -365,11 +373,13 @@ defmodule BotgradeWeb.CampaignLive do
               current_zone_id={@current_space && @current_space.zone_id}
               visited_spaces={@state.visited_spaces}
               spaces={@state.spaces}
+              access_cards={@state.access_cards}
             />
 
             <.campaign_player_status
               player_cards={@state.player_cards}
               player_resources={@state.player_resources}
+              access_cards={@state.access_cards}
             />
 
           <% :shop -> %>
@@ -380,6 +390,7 @@ defmodule BotgradeWeb.CampaignLive do
             <.campaign_player_status
               player_cards={@state.player_cards}
               player_resources={@state.player_resources}
+              access_cards={@state.access_cards}
             />
 
           <% :rest -> %>
@@ -396,6 +407,7 @@ defmodule BotgradeWeb.CampaignLive do
             <.campaign_player_status
               player_cards={@state.player_cards}
               player_resources={@state.player_resources}
+              access_cards={@state.access_cards}
             />
 
           <% :charger -> %>
@@ -407,6 +419,7 @@ defmodule BotgradeWeb.CampaignLive do
             <.campaign_player_status
               player_cards={@state.player_cards}
               player_resources={@state.player_resources}
+              access_cards={@state.access_cards}
             />
 
           <% :junker -> %>
@@ -416,6 +429,7 @@ defmodule BotgradeWeb.CampaignLive do
             <.campaign_player_status
               player_cards={@state.player_cards}
               player_resources={@state.player_resources}
+              access_cards={@state.access_cards}
             />
 
           <% :event -> %>

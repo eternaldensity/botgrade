@@ -202,7 +202,9 @@ defmodule Botgrade.Game.CardSerializer do
       "enemy_patrol_path" => space.enemy_patrol_path,
       "encounter_range" => space.encounter_range,
       "danger_rating" => space.danger_rating,
-      "cleared" => space.cleared
+      "cleared" => space.cleared,
+      "access_level" => space.access_level,
+      "holds_access_card" => space.holds_access_card
     }
   end
 
@@ -221,7 +223,9 @@ defmodule Botgrade.Game.CardSerializer do
       enemy_patrol_path: map["enemy_patrol_path"] || [],
       encounter_range: map["encounter_range"] || 1,
       danger_rating: map["danger_rating"] || 1,
-      cleared: map["cleared"] || false
+      cleared: map["cleared"] || false,
+      access_level: map["access_level"],
+      holds_access_card: map["holds_access_card"]
     }
   end
 
@@ -301,6 +305,7 @@ defmodule Botgrade.Game.CardSerializer do
       "movement_points" => state.movement_points,
       "max_movement_points" => state.max_movement_points,
       "turn_number" => state.turn_number,
+      "access_cards" => state.access_cards,
       "created_at" => state.created_at,
       "updated_at" => state.updated_at
     }
@@ -326,6 +331,7 @@ defmodule Botgrade.Game.CardSerializer do
          movement_points: map["movement_points"] || 1,
          max_movement_points: map["max_movement_points"] || 1,
          turn_number: map["turn_number"] || 1,
+         access_cards: map["access_cards"] || [],
          created_at: map["created_at"],
          updated_at: map["updated_at"]
        }}

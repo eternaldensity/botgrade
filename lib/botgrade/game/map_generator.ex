@@ -4,7 +4,7 @@ defmodule Botgrade.Game.MapGenerator do
   Seed → zones (ZoneGenerator) → tiles (TileGenerator) → linked spaces.
   """
 
-  alias Botgrade.Game.{ZoneGenerator, TileGenerator, Zone}
+  alias Botgrade.Game.{ZoneGenerator, TileGenerator, AccessGatePlacer, Zone}
 
   @start_zone_pos {0, 2}
   @exit_zone_pos {7, 2}
@@ -35,6 +35,9 @@ defmodule Botgrade.Game.MapGenerator do
 
     # Step 4: Build flat space lookup
     spaces = build_space_index(tiles)
+
+    # Step 5: Place access gates and card-holding guardian enemies
+    {tiles, spaces} = AccessGatePlacer.place_gates_and_cards(zones, tiles, spaces, seed)
 
     {zones, tiles, spaces, seed}
   end
