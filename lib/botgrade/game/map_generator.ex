@@ -6,8 +6,8 @@ defmodule Botgrade.Game.MapGenerator do
 
   alias Botgrade.Game.{ZoneGenerator, TileGenerator, Zone}
 
-  @start_zone_pos {0, 1}
-  @exit_zone_pos {7, 1}
+  @start_zone_pos {0, 2}
+  @exit_zone_pos {7, 2}
 
   @doc """
   Generate a complete campaign map.
@@ -15,7 +15,7 @@ defmodule Botgrade.Game.MapGenerator do
   Options:
     - `:seed` - integer seed for reproducible generation (default: random)
     - `:grid_cols` - zone grid width (default 8)
-    - `:grid_rows` - zone grid height (default 3)
+    - `:grid_rows` - zone grid height (default 5)
 
   Returns `{zones, tiles, spaces, seed}`.
   """
@@ -51,7 +51,7 @@ defmodule Botgrade.Game.MapGenerator do
     end)
   end
 
-  # Determine which cardinal directions have neighboring zones
+  # Determine which cardinal directions have maze-connected neighboring zones
   defp compute_neighbor_dirs(%Zone{} = zone, zones) do
     {col, row} = zone.grid_pos
 
@@ -64,7 +64,9 @@ defmodule Botgrade.Game.MapGenerator do
 
     direction_offsets
     |> Enum.filter(fn {_dir, pos} ->
-      Enum.any?(zones, fn {_id, z} -> z.grid_pos == pos end)
+      Enum.any?(zones, fn {id, z} ->
+        z.grid_pos == pos and id in zone.neighbors
+      end)
     end)
     |> Enum.map(&elem(&1, 0))
   end

@@ -1,7 +1,7 @@
 defmodule Botgrade.Game.ZoneGenerator do
   @moduledoc """
   Generates a grid of zones for the campaign map from a seed.
-  Produces an 8x3 grid with ~75% fill, adjacency constraints,
+  Produces an 8x5 grid with ~60% fill, maze-like connectivity,
   and a danger gradient from start (left) to exit (right).
   """
 
@@ -9,14 +9,14 @@ defmodule Botgrade.Game.ZoneGenerator do
 
   @zone_types [:industrial, :residential, :commercial]
   @grid_cols 8
-  @grid_rows 3
+  @grid_rows 5
 
   @doc """
   Generate a zone grid from a seed. Returns `%{zone_id => Zone.t()}`.
 
   Options:
-    - `:grid_cols` - grid width (default 4)
-    - `:grid_rows` - grid height (default 3)
+    - `:grid_cols` - grid width (default 8)
+    - `:grid_rows` - grid height (default 5)
   """
   @spec generate_zones(integer(), keyword()) :: %{String.t() => Zone.t()}
   def generate_zones(seed, opts \\ []) do
@@ -29,18 +29,21 @@ defmodule Botgrade.Game.ZoneGenerator do
     # Step 1: Determine which grid cells are filled
     cells = generate_cell_layout(cols, rows)
 
-    # Step 2: Assign zone types respecting adjacency rules
+    # Step 2: Generate maze-like connectivity (spanning tree + some extras)
+    edges = generate_maze_edges(cells)
+
+    # Step 3: Assign zone types respecting adjacency rules
     cells_with_types = assign_zone_types(cells, cols, rows)
 
-    # Step 3: Assign danger ratings with gradient
+    # Step 4: Assign danger ratings with gradient
     cells_with_danger = assign_danger_ratings(cells_with_types, cols)
 
-    # Step 4: Build Zone structs with neighbor lists
-    build_zones(cells_with_danger, cols, rows)
+    # Step 5: Build Zone structs with maze neighbor lists
+    build_zones(cells_with_danger, edges)
   end
 
   # Generate which cells are filled. Start and exit are always filled.
-  # Fills ~75% of remaining cells, ensuring connectivity.
+  # Fills ~60% of remaining cells, ensuring connectivity.
   defp generate_cell_layout(cols, rows) do
     # Always fill start {0, mid} and exit {cols-1, mid}
     mid = div(rows, 2)
@@ -50,8 +53,8 @@ defmodule Botgrade.Game.ZoneGenerator do
     all_cells =
       for col <- 0..(cols - 1), row <- 0..(rows - 1), {col, row} not in required, do: {col, row}
 
-    # Fill ~75% of remaining cells
-    fill_count = round(length(all_cells) * 0.75)
+    # Fill ~60% of remaining cells for more gaps
+    fill_count = round(length(all_cells) * 0.60)
     filled = Enum.take_random(all_cells, fill_count)
     all_filled = MapSet.new(required ++ filled)
 
@@ -140,6 +143,54 @@ defmodule Botgrade.Game.ZoneGenerator do
     end
   end
 
+  # Generate maze-like edges: random spanning tree + ~25% extra edges for loops.
+  # Returns a MapSet of edges as sorted tuples {pos_a, pos_b} where pos_a < pos_b.
+  defp generate_maze_edges(cells) do
+    cell_list = MapSet.to_list(cells)
+
+    # All possible edges between adjacent filled cells
+    all_edges =
+      for a <- cell_list,
+          b <- grid_neighbors(a),
+          MapSet.member?(cells, b),
+          a < b,
+          do: {a, b}
+
+    all_edges = Enum.uniq(all_edges)
+
+    # Build spanning tree using randomized Kruskal's algorithm
+    shuffled = Enum.shuffle(all_edges)
+    parent = Map.new(cell_list, fn c -> {c, c} end)
+
+    {tree_edges, _parent} =
+      Enum.reduce(shuffled, {[], parent}, fn {a, b}, {edges, par} ->
+        ra = find_root(par, a)
+        rb = find_root(par, b)
+
+        if ra != rb do
+          {[{a, b} | edges], Map.put(par, ra, rb)}
+        else
+          {edges, par}
+        end
+      end)
+
+    tree_set = MapSet.new(tree_edges)
+
+    # Add ~25% of remaining edges for occasional loops
+    extra_candidates = Enum.filter(all_edges, fn e -> not MapSet.member?(tree_set, e) end)
+    extra_count = round(length(extra_candidates) * 0.25)
+    extra = Enum.take_random(extra_candidates, extra_count)
+
+    MapSet.union(tree_set, MapSet.new(extra))
+  end
+
+  defp find_root(parent, node) do
+    case Map.fetch!(parent, node) do
+      ^node -> node
+      p -> find_root(parent, p)
+    end
+  end
+
   # Assign danger ratings following a left-to-right gradient
   defp assign_danger_ratings(cells_with_types, cols) do
     Map.new(cells_with_types, fn {{col, row}, type} ->
@@ -163,8 +214,8 @@ defmodule Botgrade.Game.ZoneGenerator do
     danger |> max(1) |> min(max_danger)
   end
 
-  # Build Zone structs with neighbor references
-  defp build_zones(cells_with_data, _cols, _rows) do
+  # Build Zone structs with maze-derived neighbor references
+  defp build_zones(cells_with_data, edges) do
     zone_ids =
       Map.new(cells_with_data, fn {{col, row}, _} ->
         {{col, row}, zone_id(col, row)}
@@ -173,9 +224,13 @@ defmodule Botgrade.Game.ZoneGenerator do
     Map.new(cells_with_data, fn {{col, row} = pos, {type, danger}} ->
       id = zone_id(col, row)
 
+      # Only include neighbors connected by maze edges
       neighbors =
         grid_neighbors(pos)
-        |> Enum.filter(&Map.has_key?(zone_ids, &1))
+        |> Enum.filter(fn nb ->
+          Map.has_key?(zone_ids, nb) and
+            (MapSet.member?(edges, {min(pos, nb), max(pos, nb)}))
+        end)
         |> Enum.map(&Map.fetch!(zone_ids, &1))
 
       zone = Zone.new(id, type, danger, pos)

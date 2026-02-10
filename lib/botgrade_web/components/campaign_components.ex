@@ -368,7 +368,7 @@ defmodule BotgradeWeb.CampaignComponents do
 
     ~H"""
     <div class="w-full overflow-x-auto">
-      <svg viewBox="0 0 1960 600" class="w-full h-auto min-w-[400px]" style="max-height: 60vh">
+      <svg viewBox="0 0 1960 980" class="w-full h-auto min-w-[400px]" style="max-height: 70vh">
         <%!-- Zone neighbor connections --%>
         <g :for={zone <- @zone_list}>
           <line
