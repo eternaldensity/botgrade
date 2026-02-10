@@ -31,7 +31,8 @@ defmodule BotgradeWeb.CampaignLive do
        view_mode: :tile,
        shop_inventory: nil,
        event_data: nil,
-       error_message: nil
+       error_message: nil,
+       info_message: nil
      )}
   end
 
@@ -74,7 +75,7 @@ defmodule BotgradeWeb.CampaignLive do
           :scavenge when not space.cleared ->
             {reward_label, resources} = scavenge_loot(space)
             CampaignServer.scavenge(socket.assigns.campaign_id, resources)
-            {:noreply, assign(socket, error_message: "Scavenged: #{reward_label}")}
+            {:noreply, assign(socket, info_message: "Scavenged: #{reward_label}")}
 
           :junker when not space.cleared ->
             {:noreply, assign(socket, view_mode: :junker)}
@@ -159,7 +160,7 @@ defmodule BotgradeWeb.CampaignLive do
   def handle_event("smithy_upgrade", %{"card-id" => card_id}, socket) do
     case CampaignServer.smithy_upgrade_card(socket.assigns.campaign_id, card_id) do
       {:ok, _state} ->
-        {:noreply, assign(socket, view_mode: :tile, error_message: "Card upgraded!")}
+        {:noreply, assign(socket, view_mode: :tile, info_message: "Card upgraded!")}
 
       {:error, reason} ->
         {:noreply, assign(socket, error_message: reason)}
@@ -171,7 +172,7 @@ defmodule BotgradeWeb.CampaignLive do
     case CampaignServer.junker_destroy_card(socket.assigns.campaign_id, card_id) do
       {:ok, scrap, _state} ->
         label = Botgrade.Game.ScrapLogic.format_resources(scrap)
-        {:noreply, assign(socket, view_mode: :tile, error_message: "Junked card! Gained: #{label}")}
+        {:noreply, assign(socket, view_mode: :tile, info_message: "Junked card! Gained: #{label}")}
 
       {:error, reason} ->
         {:noreply, assign(socket, error_message: reason)}
@@ -180,13 +181,13 @@ defmodule BotgradeWeb.CampaignLive do
 
   @impl true
   def handle_event("leave_space", %{"clear" => "false"}, socket) do
-    {:noreply, assign(socket, view_mode: :tile, shop_inventory: nil, event_data: nil)}
+    {:noreply, assign(socket, view_mode: :tile, shop_inventory: nil, event_data: nil, info_message: nil)}
   end
 
   @impl true
   def handle_event("leave_space", _params, socket) do
     CampaignServer.clear_current_space(socket.assigns.campaign_id)
-    {:noreply, assign(socket, view_mode: :tile, shop_inventory: nil, event_data: nil)}
+    {:noreply, assign(socket, view_mode: :tile, shop_inventory: nil, event_data: nil, info_message: nil)}
   end
 
   @impl true
@@ -211,6 +212,11 @@ defmodule BotgradeWeb.CampaignLive do
     end
 
     {:noreply, assign(socket, view_mode: :tile, event_data: nil)}
+  end
+
+  @impl true
+  def handle_event("dismiss_info", _params, socket) do
+    {:noreply, assign(socket, info_message: nil)}
   end
 
   @impl true
@@ -254,6 +260,14 @@ defmodule BotgradeWeb.CampaignLive do
       <%!-- Error Message --%>
       <div :if={@error_message} class="alert alert-error text-sm mx-4 mt-2">
         {@error_message}
+      </div>
+
+      <%!-- Info Message --%>
+      <div :if={@info_message} class="alert alert-info text-sm mx-4 mt-2 flex justify-between items-center">
+        <span>{@info_message}</span>
+        <button phx-click="dismiss_info" class="btn btn-ghost btn-xs">
+          <.icon name="hero-x-mark-mini" class="size-4" />
+        </button>
       </div>
 
       <%!-- Main Content --%>
