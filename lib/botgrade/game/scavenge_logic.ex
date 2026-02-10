@@ -65,10 +65,17 @@ defmodule Botgrade.Game.ScavengeLogic do
 
     player = state.player
 
-    all_player_cards =
-      (player.installed ++ player.deck ++ player.hand ++ player.discard ++ taken_cards)
+    existing_cards =
+      (player.installed ++ player.deck ++ player.hand ++ player.discard)
       |> Enum.reject(&(&1.damage == :destroyed))
+      |> Enum.map(&reset_card_state_keep_charges/1)
+
+    # Taken loot cards get full reset (batteries start fully charged)
+    taken_cards_reset =
+      taken_cards
       |> Enum.map(&reset_card_state/1)
+
+    all_player_cards = existing_cards ++ taken_cards_reset
     merged_resources = ScrapLogic.merge_resources(player.resources, state.scavenge_scraps)
     updated_player = %{player | deck: all_player_cards, hand: [], discard: [], installed: [], resources: merged_resources}
 
@@ -134,6 +141,33 @@ defmodule Botgrade.Game.ScavengeLogic do
       _ ->
         %{card | properties: props}
     end
+  end
+
+  # Like reset_card_state but preserves battery remaining_activations
+  defp reset_card_state_keep_charges(card) do
+    cleared_slots =
+      if card.type == :capacitor,
+        do: card.dice_slots,
+        else: Enum.map(card.dice_slots, &%{&1 | assigned_die: nil})
+
+    card = %{card |
+      dice_slots: cleared_slots,
+      last_result: nil
+    }
+
+    max_hp = Map.get(card.properties, :card_hp, 2)
+
+    card =
+      case card.damage do
+        :intact -> %{card | current_hp: max_hp}
+        :damaged -> %{card | current_hp: div(max_hp, 2)}
+        :destroyed -> %{card | current_hp: 0}
+      end
+
+    props = Map.delete(card.properties, :overkill)
+    props = Map.delete(props, :activated_this_turn)
+
+    %{card | properties: props}
   end
 
   defp add_log(state, message) do

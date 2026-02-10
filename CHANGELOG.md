@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Add scavenging system for defeated robots (#1)
 
 ### Fixed
+- Battery charges not persisting between quick combat fights (#26)
 - Investigate shield removal timing (#24)
 - Fix card reuse and discard during turn (#17)
 - Reset player card state when transitioning between fights (#16)
