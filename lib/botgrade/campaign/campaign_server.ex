@@ -565,6 +565,9 @@ defmodule Botgrade.Campaign.CampaignServer do
           Map.update!(spaces, space_id, &%{&1 | cleared: false})
         end)
 
+      # Also refresh the nearest cleared charger (same search conditions)
+      updated_spaces = refresh_nearest_charger(state, updated_spaces, player_tile_id)
+
       updated_tiles = sync_tiles_from_spaces(state.tiles, updated_spaces)
       count = length(closest)
 
@@ -575,6 +578,34 @@ defmodule Botgrade.Campaign.CampaignServer do
       )
 
       %{state | spaces: updated_spaces, tiles: updated_tiles}
+    end
+  end
+
+  defp refresh_nearest_charger(state, spaces, player_tile_id) do
+    tiles = sync_tiles_from_spaces(state.tiles, spaces)
+
+    current_candidates = cleared_chargers_on_tile(tiles, player_tile_id)
+
+    candidates =
+      if current_candidates == [] do
+        adjacent_tile_ids = adjacent_tiles(tiles, state.zones, player_tile_id)
+
+        Enum.flat_map(adjacent_tile_ids, fn tid ->
+          cleared_chargers_on_tile(tiles, tid)
+        end)
+      else
+        current_candidates
+      end
+
+    if candidates == [] do
+      spaces
+    else
+      distances = bfs_distances(spaces, state.current_space_id, MapSet.new(candidates))
+      min_dist = distances |> Map.values() |> Enum.min()
+      closest = for {sid, d} <- distances, d == min_dist, do: sid
+      # Refresh only one charger (the first closest)
+      [charger_id | _] = closest
+      Map.update!(spaces, charger_id, &%{&1 | cleared: false})
     end
   end
 
@@ -593,6 +624,19 @@ defmodule Botgrade.Campaign.CampaignServer do
         tile.spaces
         |> Map.values()
         |> Enum.filter(&(&1.type == :enemy and &1.cleared))
+        |> Enum.map(& &1.id)
+    end
+  end
+
+  defp cleared_chargers_on_tile(tiles, tile_id) do
+    case Map.get(tiles, tile_id) do
+      nil ->
+        []
+
+      tile ->
+        tile.spaces
+        |> Map.values()
+        |> Enum.filter(&(&1.type == :charger and &1.cleared))
         |> Enum.map(& &1.id)
     end
   end
