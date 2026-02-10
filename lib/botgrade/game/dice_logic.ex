@@ -63,6 +63,17 @@ defmodule Botgrade.Game.DiceLogic do
         unless Card.meets_condition?(slot.condition, die.value) do
           {:error, "Die doesn't meet slot condition."}
         else
+          # Damaged capacitors cap stored die values
+          {die, cap_log} =
+            if card.type == :capacitor and card.damage == :damaged and
+                 die.value > Card.damaged_capacitor_max_value() do
+              original = die.value
+              {%{die | value: Card.damaged_capacitor_max_value()},
+               "#{card.name} is damaged — die capped from #{original} to #{Card.damaged_capacitor_max_value()}."}
+            else
+              {die, nil}
+            end
+
           updated_slot = %{slot | assigned_die: die}
           updated_slots = List.replace_at(card.dice_slots, slot_idx, updated_slot)
           updated_card = %{card | dice_slots: updated_slots}
@@ -87,6 +98,7 @@ defmodule Botgrade.Game.DiceLogic do
           }
 
           state = %{state | player: player}
+          state = if cap_log, do: add_log(state, cap_log), else: state
           state = if blazing_log, do: add_log(state, blazing_log), else: state
 
           # Immediate activation: when all slots filled on a weapon/armor/utility, fire it now

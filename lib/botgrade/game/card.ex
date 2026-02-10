@@ -49,10 +49,45 @@ defmodule Botgrade.Game.Card do
     if hp <= div(max_hp, 2), do: :damaged, else: :intact
   end
 
+  @damaged_capacitor_max_value 5
+
   @doc """
   Updates the card's `damage` field to match the derived damage state from HP.
+  For capacitors, clamps stored die values when transitioning to damaged state.
   """
   @spec sync_damage_state(t()) :: t()
   def sync_damage_state(%__MODULE__{current_hp: nil} = card), do: card
-  def sync_damage_state(%__MODULE__{} = card), do: %{card | damage: damage_state(card)}
+
+  def sync_damage_state(%__MODULE__{} = card) do
+    new_damage = damage_state(card)
+    card = %{card | damage: new_damage}
+
+    if card.type == :capacitor and new_damage == :damaged do
+      clamp_capacitor_dice(card)
+    else
+      card
+    end
+  end
+
+  @doc """
+  Clamps stored dice on a damaged capacitor to the max allowed value.
+  """
+  def clamp_capacitor_dice(%__MODULE__{type: :capacitor, damage: :damaged} = card) do
+    clamped_slots =
+      Enum.map(card.dice_slots, fn slot ->
+        case slot.assigned_die do
+          %{value: v} = die when v > @damaged_capacitor_max_value ->
+            %{slot | assigned_die: %{die | value: @damaged_capacitor_max_value}}
+
+          _ ->
+            slot
+        end
+      end)
+
+    %{card | dice_slots: clamped_slots}
+  end
+
+  def clamp_capacitor_dice(card), do: card
+
+  def damaged_capacitor_max_value, do: @damaged_capacitor_max_value
 end

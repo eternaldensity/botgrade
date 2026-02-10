@@ -209,6 +209,9 @@ defmodule BotgradeWeb.CombatCardComponents do
       <% :capacitor -> %>
         <div class="space-y-0.5">
           <span>Stores {length(@card.dice_slots)} dice</span>
+          <span :if={@card.damage == :damaged} class="text-warning text-[10px]">
+            (max {Card.damaged_capacitor_max_value()})
+          </span>
           <div class="text-[10px] text-base-content/50">Stored dice persist between turns</div>
         </div>
       <% :weapon -> %>
@@ -665,6 +668,9 @@ defmodule BotgradeWeb.CombatCardComponents do
       "Damaged: die capped at #{card.properties.die_sides - 2}"
     end
   end
+
+  defp damage_penalty_description(%{type: :capacitor}),
+    do: "Damaged: stored dice capped at #{Card.damaged_capacitor_max_value()}"
 
   defp damage_penalty_description(%{type: :weapon}), do: "Damaged: total damage halved"
   defp damage_penalty_description(%{type: :armor}), do: "Damaged: total defense halved"
