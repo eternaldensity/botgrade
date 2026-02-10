@@ -43,13 +43,35 @@ defmodule Botgrade.Game.Targeting do
 
     total_weight = Enum.reduce(weighted, 0, fn {_, w}, acc -> acc + w end)
 
-    if total_weight <= 0 do
-      Enum.random(targetable_cards)
-    else
-      roll = :rand.uniform(total_weight)
-      pick_weighted(weighted, roll)
+    target =
+      if total_weight <= 0 do
+        Enum.random(targetable_cards)
+      else
+        roll = :rand.uniform(total_weight)
+        pick_weighted(weighted, roll)
+      end
+
+    maybe_redirect_to_ablative(target, targetable_cards)
+  end
+
+  @doc """
+  If the selected target is a CPU card, checks for an alive Ablative Ceramic
+  chassis card among the targetable cards and redirects the hit to it instead.
+  """
+  def maybe_redirect_to_ablative(nil, _targetable), do: nil
+
+  def maybe_redirect_to_ablative(%Card{type: :cpu} = target, targetable) do
+    case Enum.find(targetable, fn card ->
+           card.type == :chassis and
+             Map.get(card.properties, :chassis_ability) == :ablative_ceramic and
+             card.current_hp > 0
+         end) do
+      nil -> target
+      ablative -> ablative
     end
   end
+
+  def maybe_redirect_to_ablative(target, _targetable), do: target
 
   defp pick_weighted([{card, weight} | _rest], roll) when roll <= weight, do: card
   defp pick_weighted([{_card, weight} | rest], roll), do: pick_weighted(rest, roll - weight)

@@ -62,6 +62,7 @@ defmodule Botgrade.Game.CardSerializer do
   defp serialize_prop_value(:end_of_turn_effect, v), do: to_string(v)
   defp serialize_prop_value(:utility_ability, v), do: to_string(v)
   defp serialize_prop_value(:capacitor_ability, v), do: to_string(v)
+  defp serialize_prop_value(:chassis_ability, v), do: to_string(v)
 
   defp serialize_prop_value(:cpu_ability, nil), do: nil
 
@@ -106,6 +107,7 @@ defmodule Botgrade.Game.CardSerializer do
   defp deserialize_prop_value("end_of_turn_effect", v), do: String.to_atom(v)
   defp deserialize_prop_value("utility_ability", v), do: String.to_atom(v)
   defp deserialize_prop_value("capacitor_ability", v), do: String.to_atom(v)
+  defp deserialize_prop_value("chassis_ability", v), do: String.to_atom(v)
 
   defp deserialize_prop_value("cpu_ability", nil), do: nil
 

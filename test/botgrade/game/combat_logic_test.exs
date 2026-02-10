@@ -14,8 +14,8 @@ defmodule Botgrade.Game.CombatLogicTest do
       assert state.phase == :draw
       assert state.turn_number == 1
       assert state.result == :ongoing
-      assert Robot.total_hp(state.player) == 11
-      assert Robot.current_hp(state.player) == 11
+      assert Robot.total_hp(state.player) == 12
+      assert Robot.current_hp(state.player) == 12
       assert Robot.total_hp(state.enemy) == 9
       assert Robot.current_hp(state.enemy) == 9
     end
@@ -424,9 +424,9 @@ defmodule Botgrade.Game.CombatLogicTest do
       assert StarterDecks.enemy_deck("unknown") == StarterDecks.enemy_deck()
     end
 
-    test "expanded_card_pool returns 36 cards" do
+    test "expanded_card_pool returns 37 cards" do
       pool = StarterDecks.expanded_card_pool()
-      assert length(pool) == 36
+      assert length(pool) == 37
     end
   end
 

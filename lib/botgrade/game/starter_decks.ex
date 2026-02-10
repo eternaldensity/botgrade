@@ -33,7 +33,7 @@ defmodule Botgrade.Game.StarterDecks do
       locomotion("loc_1", "Treads", speed_base: 1, card_hp: 2),
       chassis("chs_1", "Core Frame", card_hp: 5),
       chassis("chs_2", "Armor Plate", card_hp: 4),
-      chassis("chs_3", "Aux Frame", card_hp: 2),
+      chassis("chs_3", "Ablative Ceramic", card_hp: 3, chassis_ability: :ablative_ceramic),
       cpu("cpu_1", "Basic CPU", card_hp: 3)
     ]
   end
@@ -503,6 +503,7 @@ defmodule Botgrade.Game.StarterDecks do
         self_damage: 1,
         targeting: %{chassis: 30, weapon: 20, armor: 15, battery: 15, cpu: 10, capacitor: 5, locomotion: 5}
       ),
+      chassis("chs_ablative", "Ablative Ceramic", card_hp: 3, chassis_ability: :ablative_ceramic),
       weapon("wpn_corrosion_sprayer", "Corrosion Sprayer",
         damage_base: 0,
         damage_type: :kinetic,
@@ -648,13 +649,15 @@ defmodule Botgrade.Game.StarterDecks do
   end
 
   defp chassis(id, name, opts) do
+    properties =
+      %{card_hp: Keyword.fetch!(opts, :card_hp)}
+      |> maybe_put(:chassis_ability, Keyword.get(opts, :chassis_ability))
+
     %Card{
       id: id,
       name: name,
       type: :chassis,
-      properties: %{
-        card_hp: Keyword.fetch!(opts, :card_hp)
-      },
+      properties: properties,
       dice_slots: []
     }
   end

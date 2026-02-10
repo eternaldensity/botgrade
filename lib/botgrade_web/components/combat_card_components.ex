@@ -273,9 +273,14 @@ defmodule BotgradeWeb.CombatCardComponents do
       <% :locomotion -> %>
         <span>Speed <span class="font-mono text-success">+{@card.properties.speed_base}</span></span>
       <% :chassis -> %>
-        <div class="flex items-center gap-1">
-          <.icon name="hero-heart-mini" class="size-3.5 text-error" />
-          <span class="font-mono">{Map.get(@card.properties, :card_hp, 0)} HP</span>
+        <div class="space-y-0.5">
+          <div class="flex items-center gap-1">
+            <.icon name="hero-heart-mini" class="size-3.5 text-error" />
+            <span class="font-mono">{Map.get(@card.properties, :card_hp, 0)} HP</span>
+          </div>
+          <div :if={Map.get(@card.properties, :chassis_ability) == :ablative_ceramic} class="text-[10px] text-info">
+            Absorbs hits targeting CPU
+          </div>
         </div>
       <% :cpu -> %>
         <div class="space-y-0.5">
