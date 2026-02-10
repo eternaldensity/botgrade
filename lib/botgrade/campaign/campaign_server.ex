@@ -16,13 +16,25 @@ defmodule Botgrade.Campaign.CampaignServer do
 
   def get_state(campaign_id), do: GenServer.call(via(campaign_id), :get_state)
 
-  def move_to_node(campaign_id, node_id),
-    do: GenServer.call(via(campaign_id), {:move_to_node, node_id})
+  def move_to_space(campaign_id, space_id),
+    do: GenServer.call(via(campaign_id), {:move_to_space, space_id})
+
+  def end_turn(campaign_id),
+    do: GenServer.call(via(campaign_id), :end_turn)
 
   def complete_combat(campaign_id, player_cards, player_resources, result),
     do: GenServer.call(via(campaign_id), {:complete_combat, player_cards, player_resources, result})
 
   def save(campaign_id), do: GenServer.call(via(campaign_id), :save)
+
+  def rest_repair(campaign_id, card_id),
+    do: GenServer.call(via(campaign_id), {:rest_repair, card_id})
+
+  def shop_buy(campaign_id, card_index),
+    do: GenServer.call(via(campaign_id), {:shop_buy, card_index})
+
+  def clear_current_space(campaign_id),
+    do: GenServer.call(via(campaign_id), :clear_current_space)
 
   # --- Callbacks ---
 
@@ -50,60 +62,85 @@ defmodule Botgrade.Campaign.CampaignServer do
   end
 
   @impl true
-  def handle_call({:move_to_node, node_id}, _from, state) do
-    current_node = Map.fetch!(state.nodes, state.current_node_id)
+  def handle_call({:move_to_space, space_id}, _from, state) do
+    current_space = Map.fetch!(state.spaces, state.current_space_id)
 
-    if node_id in current_node.edges do
-      target_node = Map.fetch!(state.nodes, node_id)
+    cond do
+      state.movement_points <= 0 ->
+        {:reply, {:error, "No movement points remaining"}, state, @idle_timeout}
 
-      new_state = %{state |
-        current_node_id: node_id,
-        visited_nodes: Enum.uniq([node_id | state.visited_nodes])
-      }
+      space_id not in current_space.connections ->
+        {:reply, {:error, "Cannot move to that space"}, state, @idle_timeout}
 
-      case target_node.type do
-        type when type in [:combat, :exit] ->
-          combat_id = Base.encode16(:crypto.strong_rand_bytes(4), case: :lower)
-          enemy_cards = enemy_deck_for_node(target_node)
+      true ->
+        target_space = Map.fetch!(state.spaces, space_id)
 
-          {:ok, _pid} =
-            CombatSupervisor.start_combat(combat_id,
-              player_cards: new_state.player_cards,
-              player_resources: new_state.player_resources,
-              enemy_cards: enemy_cards
-            )
+        new_state = %{state |
+          current_space_id: space_id,
+          visited_spaces: Enum.uniq([space_id | state.visited_spaces]),
+          movement_points: state.movement_points - 1
+        }
 
-          new_state = %{new_state | combat_id: combat_id}
-          auto_save(new_state)
-          broadcast(new_state)
-          {:reply, {:combat, combat_id, new_state}, new_state, @idle_timeout}
+        case check_space_encounter(target_space) do
+          {:combat, enemy_type} ->
+            combat_id = Base.encode16(:crypto.strong_rand_bytes(4), case: :lower)
+            enemy_cards = enemy_deck_for_type(enemy_type, target_space.danger_rating)
 
-        _other ->
-          auto_save(new_state)
-          broadcast(new_state)
-          {:reply, {:ok, target_node, new_state}, new_state, @idle_timeout}
-      end
-    else
-      {:reply, {:error, "Cannot move to that node"}, state, @idle_timeout}
+            {:ok, _pid} =
+              CombatSupervisor.start_combat(combat_id,
+                player_cards: new_state.player_cards,
+                player_resources: new_state.player_resources,
+                enemy_cards: enemy_cards
+              )
+
+            new_state = %{new_state | combat_id: combat_id, movement_points: 0}
+            auto_save(new_state)
+            broadcast(new_state)
+            {:reply, {:combat, combat_id, new_state}, new_state, @idle_timeout}
+
+          :nothing ->
+            # Auto-end turn if no movement left
+            new_state =
+              if new_state.movement_points <= 0,
+                do: advance_turn(new_state),
+                else: new_state
+
+            auto_save(new_state)
+            broadcast(new_state)
+            {:reply, {:ok, target_space, new_state}, new_state, @idle_timeout}
+        end
     end
   end
 
   @impl true
+  def handle_call(:end_turn, _from, state) do
+    new_state = advance_turn(state)
+    auto_save(new_state)
+    broadcast(new_state)
+    {:reply, {:ok, new_state}, new_state, @idle_timeout}
+  end
+
+  @impl true
   def handle_call({:complete_combat, player_cards, player_resources, result}, _from, state) do
-    updated_nodes =
+    updated_spaces =
       if result == :player_wins do
-        Map.update!(state.nodes, state.current_node_id, &%{&1 | cleared: true})
+        Map.update!(state.spaces, state.current_space_id, &%{&1 | cleared: true})
       else
-        state.nodes
+        state.spaces
       end
 
+    updated_tiles = sync_tiles_from_spaces(state.tiles, updated_spaces)
+
     new_state = %{state |
-      nodes: updated_nodes,
+      spaces: updated_spaces,
+      tiles: updated_tiles,
       player_cards: player_cards,
       player_resources: player_resources,
-      combat_id: nil
+      combat_id: nil,
+      movement_points: 0
     }
 
+    new_state = advance_turn(new_state)
     auto_save(new_state)
     broadcast(new_state)
     {:reply, {:ok, new_state}, new_state, @idle_timeout}
@@ -168,9 +205,10 @@ defmodule Botgrade.Campaign.CampaignServer do
   end
 
   @impl true
-  def handle_call(:clear_current_node, _from, state) do
-    updated_nodes = Map.update!(state.nodes, state.current_node_id, &%{&1 | cleared: true})
-    new_state = %{state | nodes: updated_nodes}
+  def handle_call(:clear_current_space, _from, state) do
+    updated_spaces = Map.update!(state.spaces, state.current_space_id, &%{&1 | cleared: true})
+    updated_tiles = sync_tiles_from_spaces(state.tiles, updated_spaces)
+    new_state = %{state | spaces: updated_spaces, tiles: updated_tiles}
     auto_save(new_state)
     broadcast(new_state)
     {:reply, {:ok, new_state}, new_state, @idle_timeout}
@@ -184,17 +222,7 @@ defmodule Botgrade.Campaign.CampaignServer do
 
   # --- Public Helpers (for LiveView) ---
 
-  def rest_repair(campaign_id, card_id),
-    do: GenServer.call(via(campaign_id), {:rest_repair, card_id})
-
-  def shop_buy(campaign_id, card_index),
-    do: GenServer.call(via(campaign_id), {:shop_buy, card_index})
-
-  def clear_current_node(campaign_id),
-    do: GenServer.call(via(campaign_id), :clear_current_node)
-
   def shop_cards_for_node(state) do
-    # Pick 4 random cards from the expanded pool with prices based on danger
     pool = StarterDecks.expanded_card_pool()
     cards = Enum.take_random(pool, min(4, length(pool)))
 
@@ -207,30 +235,67 @@ defmodule Botgrade.Campaign.CampaignServer do
   # --- Private ---
 
   defp new_campaign(campaign_id) do
-    nodes = MapGenerator.generate_map()
-    start_node_id = find_start_node(nodes)
+    seed = :rand.uniform(1_000_000)
+    {zones, tiles, spaces, seed} = MapGenerator.generate_map(seed: seed)
+    start_space_id = find_start_space(spaces)
     player_cards = StarterDecks.player_deck()
+    movement_points = CampaignState.calculate_movement_points(player_cards)
 
     %CampaignState{
       id: campaign_id,
-      nodes: nodes,
-      current_node_id: start_node_id,
+      seed: seed,
+      zones: zones,
+      tiles: tiles,
+      spaces: spaces,
+      current_space_id: start_space_id,
       player_cards: player_cards,
       player_resources: %{},
-      visited_nodes: [start_node_id],
+      visited_spaces: [start_space_id],
+      movement_points: movement_points,
+      max_movement_points: movement_points,
+      turn_number: 1,
       created_at: DateTime.utc_now() |> DateTime.to_iso8601()
     }
   end
 
-  defp find_start_node(nodes) do
-    nodes
-    |> Enum.find(fn {_id, node} -> node.type == :start end)
+  defp find_start_space(spaces) do
+    spaces
+    |> Enum.find(fn {_id, space} -> space.type == :start end)
     |> elem(0)
   end
 
-  defp enemy_deck_for_node(node) do
-    enemy_type = node.enemy_type || "rogue"
+  defp check_space_encounter(space) do
+    if space.type == :enemy and not space.cleared and space.enemy_type do
+      {:combat, space.enemy_type}
+    else
+      :nothing
+    end
+  end
+
+  defp enemy_deck_for_type(enemy_type, _danger_rating) do
     StarterDecks.enemy_deck(enemy_type)
+  end
+
+  defp advance_turn(state) do
+    # Future: enemy movement phase goes here
+    movement_points = CampaignState.calculate_movement_points(state.player_cards)
+
+    %{state |
+      turn_number: state.turn_number + 1,
+      movement_points: movement_points,
+      max_movement_points: movement_points
+    }
+  end
+
+  defp sync_tiles_from_spaces(tiles, spaces) do
+    Map.new(tiles, fn {tile_id, tile} ->
+      updated_tile_spaces =
+        Map.new(tile.spaces, fn {space_id, _old_space} ->
+          {space_id, Map.fetch!(spaces, space_id)}
+        end)
+
+      {tile_id, %{tile | spaces: updated_tile_spaces}}
+    end)
   end
 
   defp auto_save(state) do
@@ -271,15 +336,12 @@ defmodule Botgrade.Campaign.CampaignServer do
   end
 
   defp card_price(card, _state) do
-    base =
-      case card.type do
-        :weapon -> %{metal: 3, chips: 1}
-        :armor -> %{metal: 2, plastic: 1}
-        :battery -> %{wire: 2, metal: 1}
-        :capacitor -> %{wire: 2, chips: 1}
-        _ -> %{metal: 2}
-      end
-
-    base
+    case card.type do
+      :weapon -> %{metal: 3, chips: 1}
+      :armor -> %{metal: 2, plastic: 1}
+      :battery -> %{wire: 2, metal: 1}
+      :capacitor -> %{wire: 2, chips: 1}
+      _ -> %{metal: 2}
+    end
   end
 end

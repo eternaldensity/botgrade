@@ -1,35 +1,80 @@
 defmodule BotgradeWeb.CampaignComponents do
   @moduledoc """
   Function components for the campaign map UI.
+  Tile-based zone map with space-by-space movement.
   """
   use Phoenix.Component
   import BotgradeWeb.CoreComponents, only: [icon: 1]
 
-  # --- Campaign Map (SVG) ---
+  # --- Tile Detail Map (primary gameplay view) ---
 
-  attr :nodes, :map, required: true
-  attr :current_node_id, :string, required: true
-  attr :visited_nodes, :list, required: true
+  attr :spaces, :map, required: true
+  attr :tiles, :map, required: true
+  attr :zones, :map, required: true
+  attr :current_space_id, :string, required: true
+  attr :visited_spaces, :list, required: true
+  attr :movement_points, :integer, required: true
 
-  def campaign_map(assigns) do
-    nodes_list = Map.values(assigns.nodes)
-    current_node = Map.get(assigns.nodes, assigns.current_node_id)
-    adjacent_ids = if current_node, do: MapSet.new(current_node.edges), else: MapSet.new()
-    visited_set = MapSet.new(assigns.visited_nodes)
+  def tile_detail_map(assigns) do
+    current_space = Map.get(assigns.spaces, assigns.current_space_id)
+    current_zone_id = current_space && current_space.zone_id
+    current_tile = Enum.find(Map.values(assigns.tiles), &(&1.zone_id == current_zone_id))
 
-    # Build edge list for SVG lines
+    reachable_ids =
+      if current_space && assigns.movement_points > 0 do
+        MapSet.new(current_space.connections)
+      else
+        MapSet.new()
+      end
+
+    visited_set = MapSet.new(assigns.visited_spaces)
+
+    # Collect spaces to render: current tile + faded adjacent tile spaces
+    {current_spaces, adjacent_spaces} =
+      if current_tile do
+        cur = Map.values(current_tile.spaces)
+
+        # Find adjacent tiles via edge connectors
+        adj_zone_ids =
+          current_tile.edge_connectors
+          |> Map.values()
+          |> Enum.reject(&is_nil/1)
+          |> Enum.map(fn ec_id ->
+            space = Map.get(assigns.spaces, ec_id)
+            space && space.zone_id
+          end)
+          |> Enum.reject(&is_nil/1)
+          |> Enum.reject(&(&1 == current_zone_id))
+          |> Enum.uniq()
+
+        adj =
+          assigns.tiles
+          |> Map.values()
+          |> Enum.filter(&(&1.zone_id in adj_zone_ids))
+          |> Enum.flat_map(&Map.values(&1.spaces))
+
+        {cur, adj}
+      else
+        {Map.values(assigns.spaces), []}
+      end
+
+    # Build edges for SVG lines
+    all_render_spaces = current_spaces ++ adjacent_spaces
+    all_render_map = Map.new(all_render_spaces, &{&1.id, &1})
+
     edges =
-      nodes_list
-      |> Enum.flat_map(fn node ->
-        Enum.map(node.edges, fn target_id ->
-          target = Map.get(assigns.nodes, target_id)
+      all_render_spaces
+      |> Enum.flat_map(fn space ->
+        Enum.map(space.connections, fn target_id ->
+          target = Map.get(all_render_map, target_id)
 
           if target do
-            {from_x, from_y} = node.position
+            {from_x, from_y} = space.position
             {to_x, to_y} = target.position
+            is_cross_tile = space.zone_id != target.zone_id
 
             traversed =
-              MapSet.member?(visited_set, node.id) and
+              MapSet.member?(visited_set, space.id) and
                 MapSet.member?(visited_set, target_id)
 
             %{
@@ -37,28 +82,39 @@ defmodule BotgradeWeb.CampaignComponents do
               from_y: from_y,
               to_x: to_x,
               to_y: to_y,
-              traversed: traversed
+              traversed: traversed,
+              cross_tile: is_cross_tile
             }
           end
         end)
         |> Enum.reject(&is_nil/1)
       end)
+      |> Enum.uniq_by(fn e -> {min(e.from_x, e.to_x), min(e.from_y, e.to_y), max(e.from_x, e.to_x), max(e.from_y, e.to_y)} end)
 
-    # Build zone background rects
-    zone_rects = build_zone_rects(nodes_list)
+    # Zone name for header
+    current_zone = current_zone_id && Map.get(assigns.zones, current_zone_id)
 
     assigns =
       assigns
-      |> assign(:nodes_list, nodes_list)
+      |> assign(:current_spaces, current_spaces)
+      |> assign(:adjacent_spaces, adjacent_spaces)
       |> assign(:edges, edges)
-      |> assign(:zone_rects, zone_rects)
-      |> assign(:adjacent_ids, adjacent_ids)
+      |> assign(:reachable_ids, reachable_ids)
       |> assign(:visited_set, visited_set)
-      |> assign(:current_node, current_node)
+      |> assign(:current_zone, current_zone)
+      |> assign(:current_tile, current_tile)
 
     ~H"""
     <div class="w-full overflow-x-auto">
-      <svg viewBox="0 0 1000 600" class="w-full h-auto min-w-[600px]" style="max-height: 70vh">
+      <div :if={@current_zone} class="text-center mb-1">
+        <span class={["font-bold text-sm", zone_text_color(@current_zone.type)]}>
+          {@current_zone.name}
+        </span>
+        <span class="text-xs text-base-content/50 ml-2">
+          Danger: {danger_stars(@current_zone.danger_rating)}
+        </span>
+      </div>
+      <svg viewBox={tile_viewbox(@current_tile)} class="w-full h-auto min-w-[400px]" style="max-height: 60vh">
         <defs>
           <filter id="glow">
             <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
@@ -69,28 +125,17 @@ defmodule BotgradeWeb.CampaignComponents do
           </filter>
         </defs>
 
-        <%!-- Zone background rects --%>
+        <%!-- Tile background --%>
         <rect
-          :for={zr <- @zone_rects}
-          x={zr.x}
-          y="0"
-          width={zr.width}
-          height="600"
-          fill={zone_bg_color(zr.type)}
-          opacity="0.08"
+          :if={@current_tile}
+          x={elem(@current_tile.bounds, 0)}
+          y={elem(@current_tile.bounds, 1)}
+          width={elem(@current_tile.bounds, 2)}
+          height={elem(@current_tile.bounds, 3)}
+          fill={zone_bg_color(@current_zone && @current_zone.type)}
+          opacity="0.06"
+          rx="8"
         />
-        <text
-          :for={zr <- @zone_rects}
-          x={zr.x + zr.width / 2}
-          y="20"
-          text-anchor="middle"
-          font-size="11"
-          fill="currentColor"
-          opacity="0.35"
-          class="font-semibold"
-        >
-          {zr.name}
-        </text>
 
         <%!-- Edges --%>
         <line
@@ -99,41 +144,71 @@ defmodule BotgradeWeb.CampaignComponents do
           y1={edge.from_y}
           x2={edge.to_x}
           y2={edge.to_y}
-          stroke={if edge.traversed, do: "#22c55e", else: "#6b7280"}
-          stroke-width={if edge.traversed, do: "3", else: "1.5"}
-          stroke-dasharray={if edge.traversed, do: "none", else: "6,4"}
-          opacity={if edge.traversed, do: "0.7", else: "0.4"}
+          stroke={cond do
+            edge.cross_tile -> "#9ca3af"
+            edge.traversed -> "#22c55e"
+            true -> "#6b7280"
+          end}
+          stroke-width={if edge.traversed, do: "2.5", else: "1.5"}
+          stroke-dasharray={cond do
+            edge.cross_tile -> "3,5"
+            edge.traversed -> "none"
+            true -> "5,3"
+          end}
+          opacity={if edge.cross_tile, do: "0.3", else: if(edge.traversed, do: "0.7", else: "0.4")}
         />
 
-        <%!-- Nodes --%>
-        <g :for={node <- @nodes_list}>
-          <% {nx, ny} = node.position %>
-          <% is_current = node.id == @current_node_id %>
-          <% is_adjacent = MapSet.member?(@adjacent_ids, node.id) %>
-          <% _is_visited = MapSet.member?(@visited_set, node.id) %>
+        <%!-- Adjacent tile spaces (faded) --%>
+        <g :for={space <- @adjacent_spaces} opacity="0.25">
+          <% {sx, sy} = space.position %>
+          <circle
+            cx={sx}
+            cy={sy}
+            r="10"
+            fill={space_fill(space.type, space.cleared)}
+            stroke={space_stroke(space.type, false)}
+            stroke-width="1"
+          />
+          <text
+            x={sx}
+            y={sy + 3}
+            text-anchor="middle"
+            font-size="10"
+            fill="white"
+            pointer-events="none"
+          >
+            {space_icon(space.type)}
+          </text>
+        </g>
 
-          <%!-- Current node pulsing ring --%>
+        <%!-- Current tile spaces --%>
+        <g :for={space <- @current_spaces}>
+          <% {sx, sy} = space.position %>
+          <% is_current = space.id == @current_space_id %>
+          <% is_reachable = MapSet.member?(@reachable_ids, space.id) %>
+
+          <%!-- Current space pulsing ring --%>
           <circle
             :if={is_current}
-            cx={nx}
-            cy={ny}
-            r="28"
+            cx={sx}
+            cy={sy}
+            r="20"
             fill="none"
             stroke="#22c55e"
             stroke-width="3"
             opacity="0.6"
             filter="url(#glow)"
           >
-            <animate attributeName="r" values="26;30;26" dur="2s" repeatCount="indefinite" />
+            <animate attributeName="r" values="18;22;18" dur="2s" repeatCount="indefinite" />
             <animate attributeName="opacity" values="0.6;0.3;0.6" dur="2s" repeatCount="indefinite" />
           </circle>
 
-          <%!-- Adjacent node highlight ring --%>
+          <%!-- Reachable space highlight --%>
           <circle
-            :if={is_adjacent and not is_current}
-            cx={nx}
-            cy={ny}
-            r="25"
+            :if={is_reachable and not is_current}
+            cx={sx}
+            cy={sy}
+            r="18"
             fill="none"
             stroke="#facc15"
             stroke-width="2"
@@ -143,64 +218,64 @@ defmodule BotgradeWeb.CampaignComponents do
             <animate attributeName="stroke-dashoffset" values="0;14" dur="1.5s" repeatCount="indefinite" />
           </circle>
 
-          <%!-- Clickable node circle --%>
+          <%!-- Space circle --%>
           <circle
-            cx={nx}
-            cy={ny}
-            r="20"
-            fill={node_fill(node.type, node.cleared)}
-            stroke={node_stroke(node.type, is_current)}
+            cx={sx}
+            cy={sy}
+            r="14"
+            fill={space_fill(space.type, space.cleared)}
+            stroke={space_stroke(space.type, is_current)}
             stroke-width={if is_current, do: "3", else: "2"}
-            opacity={if node.cleared and not is_current, do: "0.5", else: "1"}
-            class={if is_adjacent, do: "cursor-pointer", else: ""}
-            phx-click={if is_adjacent, do: "move_to_node"}
-            phx-value-node-id={if is_adjacent, do: node.id}
+            opacity={if space.cleared and not is_current, do: "0.5", else: "1"}
+            class={if is_reachable, do: "cursor-pointer", else: ""}
+            phx-click={if is_reachable, do: "move_to_space"}
+            phx-value-space-id={if is_reachable, do: space.id}
           />
 
-          <%!-- Node icon --%>
+          <%!-- Space icon --%>
           <text
-            x={nx}
-            y={ny + 5}
+            x={sx}
+            y={sy + 4}
             text-anchor="middle"
-            font-size="16"
+            font-size="12"
             fill="white"
             pointer-events="none"
-            opacity={if node.cleared and not is_current, do: "0.5", else: "1"}
+            opacity={if space.cleared and not is_current, do: "0.5", else: "1"}
           >
-            {node_icon(node.type)}
+            {space_icon(space.type)}
           </text>
 
-          <%!-- Node label --%>
+          <%!-- Space label --%>
           <text
-            x={nx}
-            y={ny + 38}
+            x={sx}
+            y={sy + 26}
             text-anchor="middle"
-            font-size="9"
+            font-size="8"
             fill="currentColor"
-            opacity={if is_adjacent, do: "0.8", else: "0.45"}
+            opacity={if is_reachable, do: "0.8", else: "0.45"}
             pointer-events="none"
           >
-            {node.label}
+            {space.label}
           </text>
 
-          <%!-- Danger rating dots --%>
-          <g :if={node.type in [:combat, :exit]} pointer-events="none">
+          <%!-- Danger dots for enemy spaces --%>
+          <g :if={space.type == :enemy and not space.cleared} pointer-events="none">
             <circle
-              :for={i <- 1..node.danger_rating}
-              cx={nx - (node.danger_rating - 1) * 4 + (i - 1) * 8}
-              cy={ny - 28}
-              r="3"
-              fill={danger_dot_color(node.danger_rating)}
+              :for={i <- 1..space.danger_rating}
+              cx={sx - (space.danger_rating - 1) * 3 + (i - 1) * 6}
+              cy={sy - 20}
+              r="2"
+              fill={danger_dot_color(space.danger_rating)}
               opacity="0.8"
             />
           </g>
 
           <%!-- Cleared checkmark --%>
           <text
-            :if={node.cleared and node.type not in [:start]}
-            x={nx + 14}
-            y={ny - 12}
-            font-size="12"
+            :if={space.cleared and space.type not in [:start, :edge_connector, :empty]}
+            x={sx + 10}
+            y={sy - 8}
+            font-size="10"
             fill="#22c55e"
             pointer-events="none"
           >
@@ -212,30 +287,181 @@ defmodule BotgradeWeb.CampaignComponents do
     """
   end
 
-  # --- Node Detail Panel ---
+  # --- Zone Overview Map ---
 
-  attr :node, :map, required: true
+  attr :zones, :map, required: true
+  attr :current_zone_id, :string, required: true
+  attr :visited_spaces, :list, required: true
+  attr :spaces, :map, required: true
 
-  def node_detail(assigns) do
+  def zone_overview_map(assigns) do
+    zone_list = Map.values(assigns.zones) |> Enum.sort_by(fn z -> z.grid_pos end)
+
+    # Determine which zones have been visited
+    visited_zone_ids =
+      assigns.visited_spaces
+      |> Enum.map(fn space_id ->
+        space = Map.get(assigns.spaces, space_id)
+        space && space.zone_id
+      end)
+      |> Enum.reject(&is_nil/1)
+      |> MapSet.new()
+
+    assigns =
+      assigns
+      |> assign(:zone_list, zone_list)
+      |> assign(:visited_zone_ids, visited_zone_ids)
+
+    ~H"""
+    <div class="w-full overflow-x-auto">
+      <svg viewBox="0 0 1000 600" class="w-full h-auto min-w-[400px]" style="max-height: 60vh">
+        <%!-- Zone neighbor connections --%>
+        <g :for={zone <- @zone_list}>
+          <line
+            :for={neighbor_id <- zone.neighbors}
+            :if={neighbor_id > zone.id}
+            x1={zone_center_x(zone)}
+            y1={zone_center_y(zone)}
+            x2={zone_center_x(Map.get(@zones, neighbor_id))}
+            y2={zone_center_y(Map.get(@zones, neighbor_id))}
+            stroke="#6b7280"
+            stroke-width="2"
+            opacity="0.3"
+          />
+        </g>
+
+        <%!-- Zone rectangles --%>
+        <g :for={zone <- @zone_list}>
+          <% is_current = zone.id == @current_zone_id %>
+          <% is_visited = MapSet.member?(@visited_zone_ids, zone.id) %>
+          <% {zx, zy} = zone_rect_pos(zone) %>
+
+          <rect
+            x={zx}
+            y={zy}
+            width="200"
+            height="150"
+            rx="12"
+            fill={zone_bg_color(zone.type)}
+            opacity={cond do
+              is_current -> "0.3"
+              is_visited -> "0.15"
+              true -> "0.08"
+            end}
+            stroke={if is_current, do: "#22c55e", else: zone_bg_color(zone.type)}
+            stroke-width={if is_current, do: "3", else: "1"}
+            class="cursor-pointer"
+            phx-click="view_zone"
+            phx-value-zone-id={zone.id}
+          />
+
+          <%!-- Zone name --%>
+          <text
+            x={zx + 100}
+            y={zy + 65}
+            text-anchor="middle"
+            font-size="13"
+            fill="currentColor"
+            class="font-bold"
+            opacity={if is_visited, do: "0.9", else: "0.5"}
+            pointer-events="none"
+          >
+            {zone.name}
+          </text>
+
+          <%!-- Zone type + danger --%>
+          <text
+            x={zx + 100}
+            y={zy + 85}
+            text-anchor="middle"
+            font-size="10"
+            fill="currentColor"
+            opacity="0.5"
+            pointer-events="none"
+          >
+            {String.capitalize(to_string(zone.type))} | {danger_stars(zone.danger_rating)}
+          </text>
+
+          <%!-- Current indicator --%>
+          <text
+            :if={is_current}
+            x={zx + 100}
+            y={zy + 110}
+            text-anchor="middle"
+            font-size="11"
+            fill="#22c55e"
+            class="font-bold"
+            pointer-events="none"
+          >
+            YOU ARE HERE
+          </text>
+        </g>
+      </svg>
+    </div>
+    """
+  end
+
+  # --- Movement Status ---
+
+  attr :movement_points, :integer, required: true
+  attr :max_movement_points, :integer, required: true
+  attr :turn_number, :integer, required: true
+
+  def movement_status(assigns) do
+    ~H"""
+    <div class="flex items-center justify-between bg-base-100 rounded-lg border border-base-300 px-3 py-2">
+      <div class="flex items-center gap-3">
+        <span class="text-sm font-semibold text-base-content/70">Turn {@turn_number}</span>
+        <div class="flex items-center gap-1.5">
+          <span class="text-sm">Move:</span>
+          <div class="flex gap-0.5">
+            <span
+              :for={i <- 1..@max_movement_points}
+              class={[
+                "w-3 h-3 rounded-full border",
+                if(i <= @movement_points,
+                  do: "bg-success border-success",
+                  else: "bg-base-300 border-base-300")
+              ]}
+            />
+          </div>
+          <span class="text-xs text-base-content/50">
+            {@movement_points}/{@max_movement_points}
+          </span>
+        </div>
+      </div>
+      <button phx-click="end_turn" class="btn btn-xs btn-outline" disabled={@movement_points <= 0}>
+        End Turn
+      </button>
+    </div>
+    """
+  end
+
+  # --- Space Detail Panel ---
+
+  attr :space, :map, required: true
+  attr :zone, :map, default: nil
+
+  def space_detail(assigns) do
     ~H"""
     <div class="card bg-base-100 shadow-sm border border-base-300">
       <div class="card-body p-4">
         <div class="flex items-center gap-2">
-          <span class={["text-2xl", node_icon_class(@node.type)]}>{node_icon(@node.type)}</span>
+          <span class={["text-2xl", space_icon_class(@space.type)]}>{space_icon(@space.type)}</span>
           <div>
-            <h3 class="font-bold">{@node.label}</h3>
-            <span class={["badge badge-sm", node_type_badge(@node.type)]}>
-              {node_type_label(@node.type)}
+            <h3 class="font-bold">{@space.label}</h3>
+            <span class={["badge badge-sm", space_type_badge(@space.type)]}>
+              {space_type_label(@space.type)}
             </span>
           </div>
         </div>
-        <div class="text-sm text-base-content/60 mt-1">
-          <span>Zone: {@node.zone.name}</span>
+        <div :if={@zone} class="text-sm text-base-content/60 mt-1">
+          <span>Zone: {@zone.name}</span>
           <span class="mx-1">|</span>
-          <span>Danger: {danger_stars(@node.danger_rating)}</span>
+          <span>Danger: {danger_stars(@space.danger_rating)}</span>
         </div>
-        <div :if={@node.type == :combat and @node.enemy_type} class="text-sm mt-1">
-          <span class="text-error font-semibold">Enemy: {enemy_display_name(@node.enemy_type)}</span>
+        <div :if={@space.type == :enemy and @space.enemy_type and not @space.cleared} class="text-sm mt-1">
+          <span class="text-error font-semibold">Enemy: {enemy_display_name(@space.enemy_type)}</span>
         </div>
       </div>
     </div>
@@ -348,7 +574,7 @@ defmodule BotgradeWeb.CampaignComponents do
         </div>
 
         <div class="card-actions justify-center mt-4">
-          <button phx-click="leave_node" class="btn btn-sm btn-ghost">
+          <button phx-click="leave_space" class="btn btn-sm btn-ghost">
             Leave Shop
           </button>
         </div>
@@ -409,37 +635,8 @@ defmodule BotgradeWeb.CampaignComponents do
         </div>
 
         <div class="card-actions justify-center mt-4">
-          <button phx-click="leave_node" class="btn btn-sm btn-ghost">
+          <button phx-click="leave_space" class="btn btn-sm btn-ghost">
             Leave Repair Bay
-          </button>
-        </div>
-      </div>
-    </div>
-    """
-  end
-
-  # --- Event Panel ---
-
-  attr :node, :map, required: true
-
-  def event_panel(assigns) do
-    {text, reward} = random_event(assigns.node)
-    assigns = assigns |> assign(:event_text, text) |> assign(:reward, reward)
-
-    ~H"""
-    <div class="card bg-base-100 shadow-lg border-2 border-info/30">
-      <div class="card-body text-center">
-        <h2 class="card-title text-info justify-center">
-          <span class="text-2xl">&#10067;</span>
-          Discovery
-        </h2>
-        <p class="text-base-content/80 mt-2">{@event_text}</p>
-        <div :if={@reward} class="mt-2">
-          <span class="badge badge-info">{@reward}</span>
-        </div>
-        <div class="card-actions justify-center mt-4">
-          <button phx-click="claim_event" class="btn btn-sm btn-info">
-            Continue
           </button>
         </div>
       </div>
@@ -449,74 +646,98 @@ defmodule BotgradeWeb.CampaignComponents do
 
   # --- Helper Functions ---
 
-  defp build_zone_rects(nodes) do
-    nodes
-    |> Enum.group_by(fn n -> n.zone.name end)
-    |> Enum.map(fn {name, zone_nodes} ->
-      xs = Enum.map(zone_nodes, fn n -> elem(n.position, 0) end)
-      min_x = Enum.min(xs) - 60
-      max_x = Enum.max(xs) + 60
-      zone = hd(zone_nodes).zone
+  defp tile_viewbox(nil), do: "0 0 1000 600"
+  defp tile_viewbox(tile) do
+    {x, y, w, h} = tile.bounds
+    # Add padding around the tile
+    pad = 30
+    "#{x - pad} #{y - pad} #{w + pad * 2} #{h + pad * 2}"
+  end
 
-      %{
-        x: max(0, min_x),
-        width: min(1000, max_x) - max(0, min_x),
-        type: zone.type,
-        name: "#{name} (Danger #{zone.danger_rating})"
-      }
-    end)
-    |> Enum.sort_by(& &1.x)
+  defp zone_rect_pos(zone) do
+    {col, row} = zone.grid_pos
+    {col * 240 + 20, row * 190 + 15}
+  end
+
+  defp zone_center_x(nil), do: 0
+  defp zone_center_x(zone) do
+    {x, _y} = zone_rect_pos(zone)
+    x + 100
+  end
+
+  defp zone_center_y(nil), do: 0
+  defp zone_center_y(zone) do
+    {_x, y} = zone_rect_pos(zone)
+    y + 75
   end
 
   defp zone_bg_color(:industrial), do: "#f59e0b"
   defp zone_bg_color(:residential), do: "#3b82f6"
   defp zone_bg_color(:commercial), do: "#a855f7"
+  defp zone_bg_color(_), do: "#6b7280"
 
-  defp node_fill(:start, _), do: "#6b7280"
-  defp node_fill(:exit, _), do: "#7c3aed"
-  defp node_fill(:combat, true), do: "#6b7280"
-  defp node_fill(:combat, _), do: "#ef4444"
-  defp node_fill(:shop, true), do: "#6b7280"
-  defp node_fill(:shop, _), do: "#eab308"
-  defp node_fill(:rest, true), do: "#6b7280"
-  defp node_fill(:rest, _), do: "#22c55e"
-  defp node_fill(:event, true), do: "#6b7280"
-  defp node_fill(:event, _), do: "#3b82f6"
+  defp zone_text_color(:industrial), do: "text-amber-400"
+  defp zone_text_color(:residential), do: "text-blue-400"
+  defp zone_text_color(:commercial), do: "text-purple-400"
+  defp zone_text_color(_), do: "text-base-content"
 
-  defp node_stroke(:start, _), do: "#9ca3af"
-  defp node_stroke(:exit, _), do: "#a78bfa"
-  defp node_stroke(_, true), do: "#22c55e"
-  defp node_stroke(:combat, _), do: "#f87171"
-  defp node_stroke(:shop, _), do: "#fbbf24"
-  defp node_stroke(:rest, _), do: "#4ade80"
-  defp node_stroke(:event, _), do: "#60a5fa"
+  defp space_fill(:start, _), do: "#6b7280"
+  defp space_fill(:exit, _), do: "#7c3aed"
+  defp space_fill(:enemy, true), do: "#6b7280"
+  defp space_fill(:enemy, _), do: "#ef4444"
+  defp space_fill(:shop, true), do: "#6b7280"
+  defp space_fill(:shop, _), do: "#eab308"
+  defp space_fill(:rest, true), do: "#6b7280"
+  defp space_fill(:rest, _), do: "#22c55e"
+  defp space_fill(:event, true), do: "#6b7280"
+  defp space_fill(:event, _), do: "#3b82f6"
+  defp space_fill(:edge_connector, _), do: "#4b5563"
+  defp space_fill(:empty, _), do: "#374151"
+  defp space_fill(_, _), do: "#374151"
 
-  defp node_icon(:start), do: "\u{1F3F3}"
-  defp node_icon(:exit), do: "\u{2B50}"
-  defp node_icon(:combat), do: "\u{2694}"
-  defp node_icon(:shop), do: "\u{1F6D2}"
-  defp node_icon(:rest), do: "\u{1F527}"
-  defp node_icon(:event), do: "?"
+  defp space_stroke(:start, _), do: "#9ca3af"
+  defp space_stroke(:exit, _), do: "#a78bfa"
+  defp space_stroke(_, true), do: "#22c55e"
+  defp space_stroke(:enemy, _), do: "#f87171"
+  defp space_stroke(:shop, _), do: "#fbbf24"
+  defp space_stroke(:rest, _), do: "#4ade80"
+  defp space_stroke(:event, _), do: "#60a5fa"
+  defp space_stroke(:edge_connector, _), do: "#6b7280"
+  defp space_stroke(:empty, _), do: "#6b7280"
+  defp space_stroke(_, _), do: "#6b7280"
 
-  defp node_icon_class(:combat), do: "text-error"
-  defp node_icon_class(:shop), do: "text-warning"
-  defp node_icon_class(:rest), do: "text-success"
-  defp node_icon_class(:event), do: "text-info"
-  defp node_icon_class(_), do: "text-base-content"
+  defp space_icon(:start), do: "\u{1F3F3}"
+  defp space_icon(:exit), do: "\u{2B50}"
+  defp space_icon(:enemy), do: "\u{2694}"
+  defp space_icon(:shop), do: "\u{1F6D2}"
+  defp space_icon(:rest), do: "\u{1F527}"
+  defp space_icon(:event), do: "?"
+  defp space_icon(:edge_connector), do: "\u{2192}"
+  defp space_icon(:empty), do: "\u{00B7}"
+  defp space_icon(_), do: "\u{00B7}"
 
-  defp node_type_badge(:combat), do: "badge-error"
-  defp node_type_badge(:shop), do: "badge-warning"
-  defp node_type_badge(:rest), do: "badge-success"
-  defp node_type_badge(:event), do: "badge-info"
-  defp node_type_badge(:exit), do: "badge-secondary"
-  defp node_type_badge(_), do: "badge-ghost"
+  defp space_icon_class(:enemy), do: "text-error"
+  defp space_icon_class(:shop), do: "text-warning"
+  defp space_icon_class(:rest), do: "text-success"
+  defp space_icon_class(:event), do: "text-info"
+  defp space_icon_class(_), do: "text-base-content"
 
-  defp node_type_label(:start), do: "Start"
-  defp node_type_label(:exit), do: "Research Lab"
-  defp node_type_label(:combat), do: "Combat"
-  defp node_type_label(:shop), do: "Shop"
-  defp node_type_label(:rest), do: "Rest"
-  defp node_type_label(:event), do: "Event"
+  defp space_type_badge(:enemy), do: "badge-error"
+  defp space_type_badge(:shop), do: "badge-warning"
+  defp space_type_badge(:rest), do: "badge-success"
+  defp space_type_badge(:event), do: "badge-info"
+  defp space_type_badge(:exit), do: "badge-secondary"
+  defp space_type_badge(_), do: "badge-ghost"
+
+  defp space_type_label(:start), do: "Start"
+  defp space_type_label(:exit), do: "Research Lab"
+  defp space_type_label(:enemy), do: "Combat"
+  defp space_type_label(:shop), do: "Shop"
+  defp space_type_label(:rest), do: "Rest"
+  defp space_type_label(:event), do: "Event"
+  defp space_type_label(:edge_connector), do: "Zone Border"
+  defp space_type_label(:empty), do: "Passage"
+  defp space_type_label(_), do: "Unknown"
 
   defp danger_stars(rating) do
     String.duplicate("\u{2605}", rating) <> String.duplicate("\u{2606}", 5 - rating)
@@ -678,14 +899,14 @@ defmodule BotgradeWeb.CampaignComponents do
     {"Nothing of note here. The city is quiet, for now.", nil, %{}}
   ]
 
-  def random_event(node) do
-    idx = :erlang.phash2(node.id, length(@events))
+  def random_event(space) do
+    idx = :erlang.phash2(space.id, length(@events))
     {text, reward_label, _resources} = Enum.at(@events, idx)
     {text, reward_label}
   end
 
-  def event_resources(node) do
-    idx = :erlang.phash2(node.id, length(@events))
+  def event_resources(space) do
+    idx = :erlang.phash2(space.id, length(@events))
     {_text, _reward_label, resources} = Enum.at(@events, idx)
     resources
   end

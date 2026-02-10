@@ -4,7 +4,7 @@ defmodule Botgrade.Game.CardSerializer do
   Handles atom keys/values, tuple conditions, and nested structures.
   """
 
-  alias Botgrade.Game.{Card, CampaignState, MapNode, Zone}
+  alias Botgrade.Game.{Card, CampaignState, Space, Tile, Zone}
 
   # --- Card ---
 
@@ -167,56 +167,103 @@ defmodule Botgrade.Game.CardSerializer do
     Map.new(resources, fn {k, v} -> {String.to_atom(k), v} end)
   end
 
+  # --- Space ---
+
+  def serialize_space(%Space{} = space) do
+    {x, y} = space.position
+
+    %{
+      "id" => space.id,
+      "type" => to_string(space.type),
+      "position" => [x, y],
+      "zone_id" => space.zone_id,
+      "connections" => space.connections,
+      "label" => space.label,
+      "enemy_type" => space.enemy_type,
+      "enemy_behavior" => if(space.enemy_behavior, do: to_string(space.enemy_behavior)),
+      "enemy_patrol_path" => space.enemy_patrol_path,
+      "encounter_range" => space.encounter_range,
+      "danger_rating" => space.danger_rating,
+      "cleared" => space.cleared
+    }
+  end
+
+  def deserialize_space(map) do
+    [x, y] = map["position"]
+
+    %Space{
+      id: map["id"],
+      type: String.to_atom(map["type"]),
+      position: {x, y},
+      zone_id: map["zone_id"],
+      connections: map["connections"] || [],
+      label: map["label"] || "",
+      enemy_type: map["enemy_type"],
+      enemy_behavior: if(map["enemy_behavior"], do: String.to_atom(map["enemy_behavior"])),
+      enemy_patrol_path: map["enemy_patrol_path"] || [],
+      encounter_range: map["encounter_range"] || 1,
+      danger_rating: map["danger_rating"] || 1,
+      cleared: map["cleared"] || false
+    }
+  end
+
+  # --- Tile ---
+
+  def serialize_tile(%Tile{} = tile) do
+    {x, y, w, h} = tile.bounds
+
+    %{
+      "id" => tile.id,
+      "zone_id" => tile.zone_id,
+      "spaces" => Map.new(tile.spaces, fn {k, v} -> {k, serialize_space(v)} end),
+      "edge_connectors" => Map.new(tile.edge_connectors, fn {k, v} -> {to_string(k), v} end),
+      "bounds" => [x, y, w, h]
+    }
+  end
+
+  def deserialize_tile(map) do
+    [x, y, w, h] = map["bounds"]
+
+    %Tile{
+      id: map["id"],
+      zone_id: map["zone_id"],
+      spaces: Map.new(map["spaces"], fn {k, v} -> {k, deserialize_space(v)} end),
+      edge_connectors:
+        Map.new(map["edge_connectors"], fn {k, v} -> {String.to_atom(k), v} end),
+      bounds: {x, y, w, h}
+    }
+  end
+
   # --- Zone ---
 
   def serialize_zone(%Zone{} = zone) do
-    %{
+    base = %{
       "type" => to_string(zone.type),
       "danger_rating" => zone.danger_rating,
       "name" => zone.name
     }
+
+    base
+    |> maybe_put("id", zone.id)
+    |> maybe_put("grid_pos", if(zone.grid_pos, do: Tuple.to_list(zone.grid_pos)))
+    |> maybe_put("neighbors", if(zone.neighbors != [], do: zone.neighbors))
   end
 
   def deserialize_zone(map) do
-    %Zone{
+    base = %Zone{
       type: String.to_atom(map["type"]),
       danger_rating: map["danger_rating"],
       name: map["name"]
     }
-  end
 
-  # --- MapNode ---
-
-  def serialize_node(%MapNode{} = node) do
-    {x, y} = node.position
-
-    %{
-      "id" => node.id,
-      "type" => to_string(node.type),
-      "position" => [x, y],
-      "zone" => serialize_zone(node.zone),
-      "cleared" => node.cleared,
-      "edges" => node.edges,
-      "label" => node.label,
-      "enemy_type" => node.enemy_type,
-      "danger_rating" => node.danger_rating
-    }
-  end
-
-  def deserialize_node(map) do
-    [x, y] = map["position"]
-
-    %MapNode{
-      id: map["id"],
-      type: String.to_atom(map["type"]),
-      position: {x, y},
-      zone: deserialize_zone(map["zone"]),
-      cleared: map["cleared"],
-      edges: map["edges"] || [],
-      label: map["label"] || "",
-      enemy_type: map["enemy_type"],
-      danger_rating: map["danger_rating"] || 1
-    }
+    base
+    |> then(fn z -> if map["id"], do: %{z | id: map["id"]}, else: z end)
+    |> then(fn z ->
+      if map["grid_pos"],
+        do: %{z | grid_pos: List.to_tuple(map["grid_pos"])},
+        else: z
+    end)
+    |> then(fn z -> if map["neighbors"], do: %{z | neighbors: map["neighbors"]}, else: z end)
   end
 
   # --- CampaignState ---
@@ -224,28 +271,49 @@ defmodule Botgrade.Game.CardSerializer do
   def serialize_campaign(%CampaignState{} = state) do
     %{
       "id" => state.id,
-      "nodes" => Map.new(state.nodes, fn {k, v} -> {k, serialize_node(v)} end),
-      "current_node_id" => state.current_node_id,
+      "seed" => state.seed,
+      "zones" => Map.new(state.zones, fn {k, v} -> {k, serialize_zone(v)} end),
+      "tiles" => Map.new(state.tiles, fn {k, v} -> {k, serialize_tile(v)} end),
+      "spaces" => Map.new(state.spaces, fn {k, v} -> {k, serialize_space(v)} end),
+      "current_space_id" => state.current_space_id,
       "player_cards" => Enum.map(state.player_cards, &serialize_card/1),
       "player_resources" => serialize_resources(state.player_resources),
-      "visited_nodes" => state.visited_nodes,
+      "visited_spaces" => state.visited_spaces,
       "combat_id" => state.combat_id,
+      "movement_points" => state.movement_points,
+      "max_movement_points" => state.max_movement_points,
+      "turn_number" => state.turn_number,
       "created_at" => state.created_at,
       "updated_at" => state.updated_at
     }
   end
 
   def deserialize_campaign(map) do
-    %CampaignState{
-      id: map["id"],
-      nodes: Map.new(map["nodes"], fn {k, v} -> {k, deserialize_node(v)} end),
-      current_node_id: map["current_node_id"],
-      player_cards: Enum.map(map["player_cards"], &deserialize_card/1),
-      player_resources: deserialize_resources(map["player_resources"]),
-      visited_nodes: map["visited_nodes"] || [],
-      combat_id: map["combat_id"],
-      created_at: map["created_at"],
-      updated_at: map["updated_at"]
-    }
+    # Detect old-format saves (node-based)
+    if Map.has_key?(map, "nodes") and not Map.has_key?(map, "zones") do
+      {:error, :incompatible_save}
+    else
+      {:ok,
+       %CampaignState{
+         id: map["id"],
+         seed: map["seed"],
+         zones: Map.new(map["zones"], fn {k, v} -> {k, deserialize_zone(v)} end),
+         tiles: Map.new(map["tiles"], fn {k, v} -> {k, deserialize_tile(v)} end),
+         spaces: Map.new(map["spaces"], fn {k, v} -> {k, deserialize_space(v)} end),
+         current_space_id: map["current_space_id"],
+         player_cards: Enum.map(map["player_cards"], &deserialize_card/1),
+         player_resources: deserialize_resources(map["player_resources"]),
+         visited_spaces: map["visited_spaces"] || [],
+         combat_id: map["combat_id"],
+         movement_points: map["movement_points"] || 1,
+         max_movement_points: map["max_movement_points"] || 1,
+         turn_number: map["turn_number"] || 1,
+         created_at: map["created_at"],
+         updated_at: map["updated_at"]
+       }}
+    end
   end
+
+  defp maybe_put(map, _key, nil), do: map
+  defp maybe_put(map, key, value), do: Map.put(map, key, value)
 end

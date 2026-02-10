@@ -34,7 +34,11 @@ defmodule Botgrade.Campaign.CampaignPersistence do
     case File.read(path) do
       {:ok, json} ->
         map = Jason.decode!(json)
-        {:ok, CardSerializer.deserialize_campaign(map)}
+
+        case CardSerializer.deserialize_campaign(map) do
+          {:ok, state} -> {:ok, state}
+          {:error, reason} -> {:error, reason}
+        end
 
       {:error, reason} ->
         {:error, reason}
@@ -54,7 +58,7 @@ defmodule Botgrade.Campaign.CampaignPersistence do
 
       case load(id) do
         {:ok, state} ->
-          %{id: id, updated_at: state.updated_at, current_node_id: state.current_node_id}
+          %{id: id, updated_at: state.updated_at, current_space_id: state.current_space_id}
 
         {:error, _} ->
           nil

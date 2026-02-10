@@ -6,10 +6,8 @@ defmodule BotgradeWeb.CampaignLive do
 
   @impl true
   def mount(%{"id" => campaign_id}, _session, socket) do
-    # Start or reconnect to campaign server
     case Registry.lookup(Botgrade.Campaign.Registry, campaign_id) do
       [] ->
-        # Try to load from save, or start fresh
         CampaignSupervisor.start_campaign(campaign_id, load_save: true)
 
       _ ->
@@ -21,14 +19,16 @@ defmodule BotgradeWeb.CampaignLive do
     end
 
     state = CampaignServer.get_state(campaign_id)
-    current_node = Map.get(state.nodes, state.current_node_id)
+    current_space = Map.get(state.spaces, state.current_space_id)
+    current_zone = current_space && Map.get(state.zones, current_space.zone_id)
 
     {:ok,
      assign(socket,
        campaign_id: campaign_id,
        state: state,
-       current_node: current_node,
-       view_mode: :map,
+       current_space: current_space,
+       current_zone: current_zone,
+       view_mode: :tile,
        shop_inventory: nil,
        event_data: nil,
        error_message: nil
@@ -37,12 +37,14 @@ defmodule BotgradeWeb.CampaignLive do
 
   @impl true
   def handle_info({:campaign_updated, state}, socket) do
-    current_node = Map.get(state.nodes, state.current_node_id)
+    current_space = Map.get(state.spaces, state.current_space_id)
+    current_zone = current_space && Map.get(state.zones, current_space.zone_id)
 
     {:noreply,
      assign(socket,
        state: state,
-       current_node: current_node,
+       current_space: current_space,
+       current_zone: current_zone,
        error_message: nil
      )}
   end
@@ -50,14 +52,14 @@ defmodule BotgradeWeb.CampaignLive do
   # --- Player Actions ---
 
   @impl true
-  def handle_event("move_to_node", %{"node-id" => node_id}, socket) do
-    case CampaignServer.move_to_node(socket.assigns.campaign_id, node_id) do
+  def handle_event("move_to_space", %{"space-id" => space_id}, socket) do
+    case CampaignServer.move_to_space(socket.assigns.campaign_id, space_id) do
       {:combat, combat_id, _state} ->
         {:noreply,
          push_navigate(socket, to: ~p"/combat/#{combat_id}?campaign_id=#{socket.assigns.campaign_id}")}
 
-      {:ok, node, _state} ->
-        case node.type do
+      {:ok, space, _state} ->
+        case space.type do
           :shop ->
             inventory = CampaignServer.shop_cards_for_node(socket.assigns.state)
             {:noreply, assign(socket, view_mode: :shop, shop_inventory: inventory)}
@@ -65,19 +67,40 @@ defmodule BotgradeWeb.CampaignLive do
           :rest ->
             {:noreply, assign(socket, view_mode: :rest)}
 
-          :event ->
-            {text, reward_label} = random_event(node)
-            {:noreply, assign(socket, view_mode: :event, event_data: %{text: text, reward: reward_label, node: node})}
+          :event when not space.cleared ->
+            {text, reward_label} = random_event(space)
+            {:noreply, assign(socket, view_mode: :event, event_data: %{text: text, reward: reward_label, space: space})}
 
           _ ->
-            # Mark non-interactive nodes as cleared
-            CampaignServer.clear_current_node(socket.assigns.campaign_id)
-            {:noreply, assign(socket, view_mode: :map)}
+            {:noreply, socket}
         end
 
       {:error, reason} ->
         {:noreply, assign(socket, error_message: reason)}
     end
+  end
+
+  @impl true
+  def handle_event("end_turn", _params, socket) do
+    case CampaignServer.end_turn(socket.assigns.campaign_id) do
+      {:ok, _state} ->
+        {:noreply, assign(socket, view_mode: :tile)}
+
+      {:error, reason} ->
+        {:noreply, assign(socket, error_message: reason)}
+    end
+  end
+
+  @impl true
+  def handle_event("toggle_view", _params, socket) do
+    new_mode = if socket.assigns.view_mode == :zone_overview, do: :tile, else: :zone_overview
+    {:noreply, assign(socket, view_mode: new_mode)}
+  end
+
+  @impl true
+  def handle_event("view_zone", %{"zone-id" => _zone_id}, socket) do
+    # Switch back to tile view (zone overview click returns to tile view centered on player)
+    {:noreply, assign(socket, view_mode: :tile)}
   end
 
   @impl true
@@ -106,16 +129,16 @@ defmodule BotgradeWeb.CampaignLive do
   end
 
   @impl true
-  def handle_event("leave_node", _params, socket) do
-    CampaignServer.clear_current_node(socket.assigns.campaign_id)
-    {:noreply, assign(socket, view_mode: :map, shop_inventory: nil, event_data: nil)}
+  def handle_event("leave_space", _params, socket) do
+    CampaignServer.clear_current_space(socket.assigns.campaign_id)
+    {:noreply, assign(socket, view_mode: :tile, shop_inventory: nil, event_data: nil)}
   end
 
   @impl true
   def handle_event("claim_event", _params, socket) do
     if socket.assigns.event_data do
-      node = socket.assigns.event_data.node
-      resources = event_resources(node)
+      space = socket.assigns.event_data.space
+      resources = event_resources(space)
 
       if map_size(resources) > 0 do
         state = socket.assigns.state
@@ -128,11 +151,11 @@ defmodule BotgradeWeb.CampaignLive do
           :player_wins
         )
       else
-        CampaignServer.clear_current_node(socket.assigns.campaign_id)
+        CampaignServer.clear_current_space(socket.assigns.campaign_id)
       end
     end
 
-    {:noreply, assign(socket, view_mode: :map, event_data: nil)}
+    {:noreply, assign(socket, view_mode: :tile, event_data: nil)}
   end
 
   @impl true
@@ -159,6 +182,13 @@ defmodule BotgradeWeb.CampaignLive do
             <.icon name="hero-arrow-left" class="size-4" />
           </button>
           <h1 class="font-bold text-lg">Campaign Map</h1>
+          <button phx-click="toggle_view" class="btn btn-ghost btn-sm">
+            <%= if @view_mode == :zone_overview do %>
+              <.icon name="hero-map-pin" class="size-4" /> Tile
+            <% else %>
+              <.icon name="hero-map" class="size-4" /> Zones
+            <% end %>
+          </button>
         </div>
         <button phx-click="save_campaign" class="btn btn-ghost btn-sm">
           <.icon name="hero-bookmark" class="size-4" />
@@ -174,18 +204,45 @@ defmodule BotgradeWeb.CampaignLive do
       <%!-- Main Content --%>
       <div class="flex-1 max-w-6xl w-full mx-auto p-4 space-y-3">
         <%= case @view_mode do %>
-          <% :map -> %>
-            <%!-- Map --%>
-            <.campaign_map
-              nodes={@state.nodes}
-              current_node_id={@state.current_node_id}
-              visited_nodes={@state.visited_nodes}
+          <% :tile -> %>
+            <%!-- Movement Status --%>
+            <.movement_status
+              movement_points={@state.movement_points}
+              max_movement_points={@state.max_movement_points}
+              turn_number={@state.turn_number}
             />
 
-            <%!-- Current node detail --%>
-            <.node_detail :if={@current_node} node={@current_node} />
+            <%!-- Tile Map --%>
+            <.tile_detail_map
+              spaces={@state.spaces}
+              tiles={@state.tiles}
+              zones={@state.zones}
+              current_space_id={@state.current_space_id}
+              visited_spaces={@state.visited_spaces}
+              movement_points={@state.movement_points}
+            />
+
+            <%!-- Current space detail --%>
+            <.space_detail
+              :if={@current_space}
+              space={@current_space}
+              zone={@current_zone}
+            />
 
             <%!-- Player status --%>
+            <.campaign_player_status
+              player_cards={@state.player_cards}
+              player_resources={@state.player_resources}
+            />
+
+          <% :zone_overview -> %>
+            <.zone_overview_map
+              zones={@state.zones}
+              current_zone_id={@current_space && @current_space.zone_id}
+              visited_spaces={@state.visited_spaces}
+              spaces={@state.spaces}
+            />
+
             <.campaign_player_status
               player_cards={@state.player_cards}
               player_resources={@state.player_resources}
@@ -238,5 +295,4 @@ defmodule BotgradeWeb.CampaignLive do
       Map.update(acc, k, v, &(&1 + v))
     end)
   end
-
 end
