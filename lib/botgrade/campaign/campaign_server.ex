@@ -224,7 +224,10 @@ defmodule Botgrade.Campaign.CampaignServer do
 
   def shop_cards_for_node(state) do
     pool = StarterDecks.expanded_card_pool()
-    cards = Enum.take_random(pool, min(4, length(pool)))
+    # Seed based on space + campaign so inventory is stable per visit
+    seed = :erlang.phash2({state.id, state.current_space_id})
+    shuffled = Enum.sort_by(pool, fn card -> :erlang.phash2({seed, card.name}) end)
+    cards = Enum.take(shuffled, min(4, length(shuffled)))
 
     Enum.map(cards, fn card ->
       price = card_price(card, state)
@@ -341,6 +344,7 @@ defmodule Botgrade.Campaign.CampaignServer do
       :armor -> %{metal: 2, plastic: 1}
       :battery -> %{wire: 2, metal: 1}
       :capacitor -> %{wire: 2, chips: 1}
+      :cpu -> %{chips: 3, wire: 2}
       _ -> %{metal: 2}
     end
   end

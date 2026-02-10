@@ -501,6 +501,9 @@ defmodule BotgradeWeb.CampaignComponents do
         <div :if={@space.type == :enemy && @space.enemy_type && !@space.cleared} class="text-sm mt-1">
           <span class="text-error font-semibold">Enemy: {enemy_display_name(@space.enemy_type)}</span>
         </div>
+        <button :if={@space.type == :shop} phx-click="enter_shop" class="btn btn-sm btn-warning mt-2">
+          <span>&#128722;</span> Enter Shop
+        </button>
       </div>
     </div>
     """
@@ -569,10 +572,15 @@ defmodule BotgradeWeb.CampaignComponents do
     ~H"""
     <div class="card bg-base-100 shadow-lg border-2 border-warning/30">
       <div class="card-body">
-        <h2 class="card-title text-warning">
-          <span class="text-2xl">&#128722;</span>
-          Scrap Trader
-        </h2>
+        <div class="flex items-center justify-between">
+          <h2 class="card-title text-warning">
+            <span class="text-2xl">&#128722;</span>
+            Scrap Trader
+          </h2>
+          <button phx-click="leave_space" phx-value-clear="false" class="btn btn-sm btn-outline btn-success gap-1">
+            <.icon name="hero-arrow-left" class="size-4" /> Leave Shop
+          </button>
+        </div>
         <p class="text-sm text-base-content/60">Trade your scrap for components.</p>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
@@ -611,11 +619,6 @@ defmodule BotgradeWeb.CampaignComponents do
           </div>
         </div>
 
-        <div class="card-actions justify-center mt-4">
-          <button phx-click="leave_space" class="btn btn-sm btn-ghost">
-            Leave Shop
-          </button>
-        </div>
       </div>
     </div>
     """

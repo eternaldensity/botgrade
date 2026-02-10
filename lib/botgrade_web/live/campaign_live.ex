@@ -104,6 +104,12 @@ defmodule BotgradeWeb.CampaignLive do
   end
 
   @impl true
+  def handle_event("enter_shop", _params, socket) do
+    inventory = CampaignServer.shop_cards_for_node(socket.assigns.state)
+    {:noreply, assign(socket, view_mode: :shop, shop_inventory: inventory)}
+  end
+
+  @impl true
   def handle_event("shop_buy", %{"card-index" => idx_str}, socket) do
     idx = String.to_integer(idx_str)
 
@@ -126,6 +132,11 @@ defmodule BotgradeWeb.CampaignLive do
       {:error, reason} ->
         {:noreply, assign(socket, error_message: reason)}
     end
+  end
+
+  @impl true
+  def handle_event("leave_space", %{"clear" => "false"}, socket) do
+    {:noreply, assign(socket, view_mode: :tile, shop_inventory: nil, event_data: nil)}
   end
 
   @impl true
