@@ -6,7 +6,7 @@ defmodule Botgrade.Game.VictoryLogic do
   based on various conditions like destroyed chassis, CPU failure, power exhaustion, etc.
   """
 
-  alias Botgrade.Game.{CombatState, Robot, Card, ScavengeLogic}
+  alias Botgrade.Game.{CombatState, Robot, ScavengeLogic}
 
   @doc """
   Checks if either combatant has been defeated and updates the combat state accordingly.
