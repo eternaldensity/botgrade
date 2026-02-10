@@ -474,8 +474,8 @@ defmodule Botgrade.Campaign.CampaignServer do
     end
   end
 
-  defp enemy_deck_for_type(enemy_type, _danger_rating) do
-    StarterDecks.enemy_deck(enemy_type)
+  defp enemy_deck_for_type(enemy_type, danger_rating) do
+    StarterDecks.enemy_deck(enemy_type) ++ StarterDecks.danger_bonus_cards(danger_rating, enemy_type)
   end
 
   defp advance_turn(state) do

@@ -705,6 +705,22 @@ defmodule Botgrade.Game.StarterDecks do
     end)
   end
 
+  def danger_bonus_cards(danger_rating, enemy_type) when danger_rating > 1 do
+    base_deck = enemy_deck(enemy_type)
+
+    Enum.flat_map(2..danger_rating, fn _level ->
+      if :rand.uniform(4) == 1 do
+        card = Enum.random(base_deck)
+        suffix = Base.encode16(:crypto.strong_rand_bytes(3), case: :lower)
+        [%{card | id: "danger_#{suffix}"}]
+      else
+        []
+      end
+    end)
+  end
+
+  def danger_bonus_cards(_danger_rating, _enemy_type), do: []
+
   defp maybe_put(map, _key, nil), do: map
   defp maybe_put(map, key, value), do: Map.put(map, key, value)
 end

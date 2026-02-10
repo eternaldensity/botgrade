@@ -296,16 +296,32 @@ defmodule BotgradeWeb.CampaignComponents do
             {space.label}
           </text>
 
-          <%!-- Danger dots for enemy spaces --%>
+          <%!-- Danger indicator for enemy spaces (roman numeral style: V = 5) --%>
           <g :if={space.type == :enemy and not space.cleared} pointer-events="none">
-            <circle
-              :for={i <- 1..space.danger_rating}
-              cx={sx - (space.danger_rating - 1) * 3 + (i - 1) * 6}
-              cy={sy - 20}
-              r="2"
-              fill={danger_dot_color(space.danger_rating)}
-              opacity="0.8"
-            />
+            <% {fives, ones} = {div(space.danger_rating, 5), rem(space.danger_rating, 5)} %>
+            <% symbols = List.duplicate(:v, fives) ++ List.duplicate(:dot, ones) %>
+            <% count = length(symbols) %>
+            <%= for {sym, i} <- Enum.with_index(symbols) do %>
+              <%= if sym == :v do %>
+                <text
+                  x={sx - (count - 1) * 4 + i * 8}
+                  y={sy - 17}
+                  text-anchor="middle"
+                  font-size="9"
+                  font-weight="bold"
+                  fill={danger_dot_color(space.danger_rating)}
+                  opacity="0.9"
+                >V</text>
+              <% else %>
+                <circle
+                  cx={sx - (count - 1) * 4 + i * 8}
+                  cy={sy - 20}
+                  r="2"
+                  fill={danger_dot_color(space.danger_rating)}
+                  opacity="0.8"
+                />
+              <% end %>
+            <% end %>
           </g>
 
           <%!-- Cleared checkmark --%>
@@ -1142,7 +1158,7 @@ defmodule BotgradeWeb.CampaignComponents do
   defp space_type_label(_), do: "Unknown"
 
   defp danger_stars(rating) do
-    String.duplicate("\u{2605}", rating) <> String.duplicate("\u{2606}", 5 - rating)
+    String.duplicate("\u{2605}", rating) <> String.duplicate("\u{2606}", 8 - rating)
   end
 
   defp danger_dot_color(1), do: "#22c55e"
@@ -1150,6 +1166,9 @@ defmodule BotgradeWeb.CampaignComponents do
   defp danger_dot_color(3), do: "#f97316"
   defp danger_dot_color(4), do: "#ef4444"
   defp danger_dot_color(5), do: "#dc2626"
+  defp danger_dot_color(6), do: "#b91c1c"
+  defp danger_dot_color(7), do: "#991b1b"
+  defp danger_dot_color(8), do: "#7f1d1d"
   defp danger_dot_color(_), do: "#6b7280"
 
   defp enemy_display_name("rogue"), do: "Rogue Bot"

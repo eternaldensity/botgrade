@@ -124,8 +124,8 @@ defmodule Botgrade.Game.ZoneGenerator do
             Enum.count(neighbor_types, &(&1 == :industrial)) < 1
 
           :residential ->
-            # Not adjacent to danger 4+ (use estimated danger)
-            danger_est < 4
+            # Not adjacent to danger 6+ (use estimated danger)
+            danger_est < 6
 
           :commercial ->
             # Always allowed (neighbor existence checked at zone level)
@@ -149,7 +149,7 @@ defmodule Botgrade.Game.ZoneGenerator do
   end
 
   defp danger_base(col, cols) do
-    1 + floor(col * 4 / max(cols - 1, 1))
+    1 + floor(col * 7 / max(cols - 1, 1))
   end
 
   defp compute_danger(col, cols, type) do
@@ -157,8 +157,8 @@ defmodule Botgrade.Game.ZoneGenerator do
     jitter = Enum.random(-1..1)
     danger = base + jitter
 
-    # Residential zones are capped at danger 3
-    max_danger = if type == :residential, do: 3, else: 5
+    # Residential zones are capped at danger 5
+    max_danger = if type == :residential, do: 5, else: 8
 
     danger |> max(1) |> min(max_danger)
   end
