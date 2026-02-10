@@ -211,6 +211,14 @@ defmodule BotgradeWeb.CombatLive do
 
     ~H"""
     <div class="min-h-screen bg-base-200 flex flex-col">
+      <%!-- Back to Menu (quick combat only) --%>
+      <div :if={is_nil(@campaign_id)} class="absolute top-2 left-2 z-50">
+        <.link navigate={~p"/"} class="btn btn-ghost btn-sm gap-1 text-base-content/60 hover:text-base-content">
+          <.icon name="hero-arrow-left-mini" class="size-4" />
+          Menu
+        </.link>
+      </div>
+
       <%!-- Enemy Status (sticky top) --%>
       <.robot_status_bar :if={@state.phase not in [:ended, :scavenging]} robot={@state.enemy} label="ENEMY" position={:top} />
 
