@@ -363,7 +363,7 @@ defmodule Botgrade.Game.CombatLogicTest do
       assert Robot.current_hp(new_state.enemy) == 4
     end
 
-    test "shield resets at end of turn but plating persists" do
+    test "shield persists through end of turn and resets at start of next turn" do
       state = %CombatState{
         id: "test",
         player: %Botgrade.Game.Robot{
@@ -383,9 +383,15 @@ defmodule Botgrade.Game.CombatLogicTest do
       }
 
       new_state = CombatLogic.end_turn(state)
-      # After cleanup, shield resets but plating persists
-      assert new_state.player.shield == 0
+      # Shield persists after end_turn so it protects during enemy attacks
+      assert new_state.player.shield == 3
       assert new_state.player.plating == 5
+
+      # Shield resets at start of next player turn (draw phase)
+      draw_state = %{new_state | phase: :draw, turn_owner: :player}
+      next_turn_state = CombatLogic.draw_phase(draw_state)
+      assert next_turn_state.player.shield == 0
+      assert next_turn_state.player.plating == 5
     end
   end
 

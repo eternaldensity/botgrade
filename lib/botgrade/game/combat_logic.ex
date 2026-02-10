@@ -24,7 +24,8 @@ defmodule Botgrade.Game.CombatLogic do
 
   @spec draw_phase(CombatState.t()) :: CombatState.t()
   def draw_phase(%CombatState{phase: :draw, turn_owner: :player} = state) do
-    player = draw_cards(state.player, @draw_count)
+    # Shield resets at start of turn, not end — so it protects during enemy attacks
+    player = %{state.player | shield: 0} |> draw_cards(@draw_count)
 
     %{state | player: player, phase: :power_up}
     |> add_log("Turn #{state.turn_number}: Drew #{length(player.hand)} cards.")
@@ -488,7 +489,8 @@ defmodule Botgrade.Game.CombatLogic do
 
   @spec enemy_turn(CombatState.t()) :: CombatState.t()
   def enemy_turn(%CombatState{phase: :enemy_turn} = state) do
-    enemy = draw_cards(state.enemy, @enemy_draw_count)
+    # Shield resets at start of turn, not end — so it protects during opponent attacks
+    enemy = %{state.enemy | shield: 0} |> draw_cards(@enemy_draw_count)
     state = %{state | enemy: enemy} |> add_log("Enemy draws #{length(enemy.hand)} cards.")
 
     state = ai_use_cpu_ability(state, :pre_battery)
@@ -510,8 +512,8 @@ defmodule Botgrade.Game.CombatLogic do
   def enemy_turn_with_events(%CombatState{phase: :enemy_turn} = state) do
     events = []
 
-    # Draw phase
-    enemy = draw_cards(state.enemy, @enemy_draw_count)
+    # Draw phase — shield resets at start of turn so it protects during opponent attacks
+    enemy = %{state.enemy | shield: 0} |> draw_cards(@enemy_draw_count)
     state = %{state | enemy: enemy} |> add_log("Enemy draws #{length(enemy.hand)} cards.")
     events = events ++ [{state, 400}]
 
@@ -1221,9 +1223,7 @@ defmodule Botgrade.Game.CombatLogic do
       | hand: charged_capacitors,
         discard: combatant.discard ++ to_discard,
         installed: installed,
-        available_dice: [],
-        # Shield resets each turn, plating persists
-        shield: 0
+        available_dice: []
     }
 
     state =
