@@ -87,6 +87,14 @@ defmodule BotgradeWeb.CombatComponents do
               <span class="text-[10px]">{scrap_label(type)}</span>
               <span class="font-mono">{count}</span>
             </span>
+            <span
+              :for={{effect, stacks} <- Enum.sort_by(Map.to_list(@robot.status_effects || %{}), fn {k, _} -> Atom.to_string(k) end)}
+              :if={stacks > 0}
+              class={["flex items-center gap-0.5 font-semibold", status_effect_color(effect)]}
+            >
+              <span class="text-[10px]">{status_effect_label(effect)}</span>
+              <span class="font-mono">{stacks}</span>
+            </span>
           </div>
         </div>
         <div class="w-full bg-base-300 rounded-full h-3 overflow-hidden">
@@ -177,13 +185,17 @@ defmodule BotgradeWeb.CombatComponents do
             class={[
               "w-12 h-14 rounded-lg border-2 flex flex-col items-center justify-center font-mono transition-all",
               @selected_die == idx && "bg-primary text-primary-content border-primary shadow-lg shadow-primary/30 -translate-y-1 scale-105",
-              @selected_die != idx && "bg-base-100 border-base-300 shadow-sm hover:shadow-md hover:-translate-y-0.5",
+              @selected_die != idx && Map.get(die, :blazing) && "bg-orange-500/20 border-orange-500 shadow-sm hover:shadow-md hover:-translate-y-0.5",
+              @selected_die != idx && not Map.get(die, :blazing, false) && "bg-base-100 border-base-300 shadow-sm hover:shadow-md hover:-translate-y-0.5",
               @phase != :power_up && "opacity-50 cursor-not-allowed"
             ]}
             disabled={@phase != :power_up}
           >
-            <span class="text-xl font-bold leading-none">{die.value}</span>
+            <span class="text-xl font-bold leading-none">
+              {if Map.get(die, :hidden), do: "?", else: die.value}
+            </span>
             <span class="text-[10px] opacity-60 leading-none">d{die.sides}</span>
+            <span :if={Map.get(die, :blazing)} class="text-[8px] text-orange-500 font-bold leading-none">BLAZE</span>
           </button>
           <span :if={@available_dice == []} class="text-sm text-base-content/50 py-3">
             No dice available
@@ -635,4 +647,18 @@ defmodule BotgradeWeb.CombatComponents do
   defp scrap_label(:plastic), do: "Plastic"
   defp scrap_label(:grease), do: "Grease"
   defp scrap_label(:chips), do: "Chips"
+
+  defp status_effect_color(:overheated), do: "text-orange-500"
+  defp status_effect_color(:subzero), do: "text-cyan-400"
+  defp status_effect_color(:fused), do: "text-violet-500"
+  defp status_effect_color(:hidden), do: "text-gray-400"
+  defp status_effect_color(:rust), do: "text-amber-700"
+  defp status_effect_color(_), do: "text-base-content/60"
+
+  defp status_effect_label(:overheated), do: "OVERHEAT"
+  defp status_effect_label(:subzero), do: "SUBZERO"
+  defp status_effect_label(:fused), do: "FUSED"
+  defp status_effect_label(:hidden), do: "HIDDEN"
+  defp status_effect_label(:rust), do: "RUST"
+  defp status_effect_label(other), do: other |> Atom.to_string() |> String.upcase()
 end

@@ -16,8 +16,8 @@ defmodule Botgrade.Game.TileGenerator do
     1 => [{"rogue", 1.0}],
     2 => [{"rogue", 0.6}, {"strikebolt", 0.4}],
     3 => [{"rogue", 0.2}, {"strikebolt", 0.3}, {"ironclad", 0.3}, {"hexapod", 0.2}],
-    4 => [{"strikebolt", 0.25}, {"ironclad", 0.35}, {"hexapod", 0.4}],
-    5 => [{"ironclad", 0.4}, {"hexapod", 0.6}]
+    4 => [{"strikebolt", 0.2}, {"ironclad", 0.25}, {"hexapod", 0.25}, {"pyroclast", 0.15}, {"specter", 0.15}],
+    5 => [{"ironclad", 0.2}, {"hexapod", 0.25}, {"pyroclast", 0.3}, {"specter", 0.25}]
   }
 
   @space_labels %{

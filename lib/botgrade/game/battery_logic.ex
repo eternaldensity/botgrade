@@ -8,7 +8,7 @@ defmodule Botgrade.Game.BatteryLogic do
   - Overclock handling (allowing batteries to activate twice)
   """
 
-  alias Botgrade.Game.{CombatState, Card, Dice}
+  alias Botgrade.Game.{CombatState, Card, Dice, ElementLogic}
 
   @doc """
   Activates a battery card in the player's hand during the power_up phase.
@@ -52,7 +52,13 @@ defmodule Botgrade.Game.BatteryLogic do
                 {dice, ""}
               end
 
-            dice_str = Enum.map_join(dice, ", ", fn d -> "#{d.value}" end)
+            # Apply element effects to rolled dice (subzero, blazing, hidden)
+            {dice, state} = ElementLogic.apply_dice_effects(dice, state, :player)
+
+            dice_str =
+              Enum.map_join(dice, ", ", fn d ->
+                if Map.get(d, :hidden), do: "?", else: "#{d.value}"
+              end)
 
             updated_card = %{
               card
@@ -114,6 +120,9 @@ defmodule Botgrade.Game.BatteryLogic do
       else
         {dice, ""}
       end
+
+    # Apply element effects to rolled dice (subzero, blazing, hidden)
+    {dice, state} = ElementLogic.apply_dice_effects(dice, state, :enemy)
 
     dice_str = Enum.map_join(dice, ", ", fn d -> "#{d.value}" end)
 

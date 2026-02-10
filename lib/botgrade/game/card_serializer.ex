@@ -58,6 +58,8 @@ defmodule Botgrade.Game.CardSerializer do
     }
   end
 
+  defp serialize_prop_value(:element, v), do: to_string(v)
+  defp serialize_prop_value(:end_of_turn_effect, v), do: to_string(v)
   defp serialize_prop_value(:utility_ability, v), do: to_string(v)
 
   defp serialize_prop_value(:cpu_ability, nil), do: nil
@@ -99,6 +101,8 @@ defmodule Botgrade.Game.CardSerializer do
     }
   end
 
+  defp deserialize_prop_value("element", v), do: String.to_atom(v)
+  defp deserialize_prop_value("end_of_turn_effect", v), do: String.to_atom(v)
   defp deserialize_prop_value("utility_ability", v), do: String.to_atom(v)
 
   defp deserialize_prop_value("cpu_ability", nil), do: nil
@@ -120,19 +124,23 @@ defmodule Botgrade.Game.CardSerializer do
   # --- Dice Slots ---
 
   defp serialize_dice_slot(slot) do
-    %{
+    base = %{
       "id" => slot.id,
       "condition" => serialize_condition(slot.condition),
       "assigned_die" => serialize_die(slot.assigned_die)
     }
+
+    if Map.get(slot, :locked), do: Map.put(base, "locked", true), else: base
   end
 
   defp deserialize_dice_slot(slot) do
-    %{
+    base = %{
       id: slot["id"],
       condition: deserialize_condition(slot["condition"]),
       assigned_die: deserialize_die(slot["assigned_die"])
     }
+
+    if slot["locked"], do: Map.put(base, :locked, true), else: base
   end
 
   # --- Dice Conditions ---
@@ -150,10 +158,20 @@ defmodule Botgrade.Game.CardSerializer do
   # --- Dice ---
 
   defp serialize_die(nil), do: nil
-  defp serialize_die(die), do: %{"sides" => die.sides, "value" => die.value}
+
+  defp serialize_die(die) do
+    %{"sides" => die.sides, "value" => die.value}
+    |> maybe_put("blazing", Map.get(die, :blazing))
+    |> maybe_put("hidden", Map.get(die, :hidden))
+  end
 
   defp deserialize_die(nil), do: nil
-  defp deserialize_die(die), do: %{sides: die["sides"], value: die["value"]}
+
+  defp deserialize_die(die) do
+    %{sides: die["sides"], value: die["value"]}
+    |> maybe_put_atom(:blazing, die["blazing"])
+    |> maybe_put_atom(:hidden, die["hidden"])
+  end
 
   # --- Resources ---
 
@@ -316,4 +334,7 @@ defmodule Botgrade.Game.CardSerializer do
 
   defp maybe_put(map, _key, nil), do: map
   defp maybe_put(map, key, value), do: Map.put(map, key, value)
+
+  defp maybe_put_atom(map, _key, nil), do: map
+  defp maybe_put_atom(map, key, value), do: Map.put(map, key, value)
 end

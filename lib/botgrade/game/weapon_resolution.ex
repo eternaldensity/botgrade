@@ -6,7 +6,7 @@ defmodule Botgrade.Game.WeaponResolution do
   at once, as opposed to immediate activation during the player's power_up phase.
   """
 
-  alias Botgrade.Game.{CombatState, Card, Damage, Targeting}
+  alias Botgrade.Game.{CombatState, Card, Damage, Targeting, ElementLogic}
 
   @doc """
   Resolves all weapons with dice assigned for a combatant.
@@ -121,7 +121,11 @@ defmodule Botgrade.Game.WeaponResolution do
               # Apply self-damage
               {att_acc, self_logs} = resolve_self_damage(att_acc, weapon)
 
-              {att_acc, def_acc, logs ++ [log_msg] ++ self_logs, tl, st}
+              # Apply element status (reconstruct state temporarily)
+              {att_acc, def_acc, elem_logs} =
+                apply_element_in_reduce(att_acc, def_acc, weapon, who)
+
+              {att_acc, def_acc, logs ++ [log_msg] ++ self_logs ++ elem_logs, tl, st}
           end
         end
       end)
@@ -362,6 +366,9 @@ defmodule Botgrade.Game.WeaponResolution do
                 | last_attack_result: %{weapon: weapon.name, target: target.id, damage: card_dmg}
               }
 
+              # Apply element status
+              acc_state = ElementLogic.apply_element_status(acc_state, weapon, who)
+
               # Apply self-damage
               acc_state = apply_self_damage(acc_state, weapon, who)
 
@@ -421,6 +428,26 @@ defmodule Botgrade.Game.WeaponResolution do
   def apply_damage_penalty(_value, %Card{damage: :destroyed}), do: 0
 
   # --- Private Helpers ---
+
+  # Applies element status to the defender directly (for use inside reduce where
+  # we don't have a full CombatState). Returns {attacker, defender, log_messages}.
+  defp apply_element_in_reduce(attacker, defender, weapon, _who) do
+    element = Map.get(weapon.properties, :element)
+    stacks = Map.get(weapon.properties, :element_stacks, 1)
+
+    if element do
+      status_map = %{fire: :overheated, ice: :subzero, magnetic: :fused, dark: :hidden, water: :rust}
+      status = Map.fetch!(status_map, element)
+      current = Map.get(defender.status_effects, status, 0)
+      new_total = current + stacks
+      defender = %{defender | status_effects: Map.put(defender.status_effects, status, new_total)}
+
+      label = status |> Atom.to_string() |> String.capitalize()
+      {attacker, defender, ["#{defender.name} gains #{label} #{new_total}! (+#{stacks})"]}
+    else
+      {attacker, defender, []}
+    end
+  end
 
   defp resolve_self_damage(combatant, weapon) do
     self_damage = Map.get(weapon.properties, :self_damage, 0)

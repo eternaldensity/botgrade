@@ -11,7 +11,8 @@ defmodule Botgrade.Game.Robot do
           available_dice: [map()],
           shield: non_neg_integer(),
           plating: non_neg_integer(),
-          resources: map()
+          resources: map(),
+          status_effects: %{atom() => non_neg_integer()}
         }
 
   @enforce_keys [:id, :name]
@@ -25,7 +26,8 @@ defmodule Botgrade.Game.Robot do
     available_dice: [],
     shield: 0,
     plating: 0,
-    resources: %{}
+    resources: %{},
+    status_effects: %{}
   ]
 
   @installed_types [:chassis, :cpu, :locomotion]

@@ -22,6 +22,7 @@ defmodule Botgrade.Game.CombatLogic do
     DiceLogic,
     WeaponResolution,
     EndTurnEffects,
+    ElementLogic,
     VictoryLogic
   }
 
@@ -58,11 +59,19 @@ defmodule Botgrade.Game.CombatLogic do
   """
   @spec draw_phase(CombatState.t()) :: CombatState.t()
   def draw_phase(%CombatState{phase: :draw, turn_owner: :player} = state) do
-    # Shield resets at start of turn, not end — so it protects during enemy attacks
-    player = %{state.player | shield: 0} |> draw_cards(@draw_count)
+    state = ElementLogic.process_start_of_turn_elements(state, :player)
 
-    %{state | player: player, phase: :power_up}
-    |> add_log("Turn #{state.turn_number}: Drew #{length(player.hand)} cards.")
+    # Shield resets at start of turn, not end — so it protects during enemy attacks
+    player = %{state.player | shield: 0}
+
+    # Draw cards and apply fused effects to drawn cards
+    {drawn, player} = draw_raw_cards(player, @draw_count)
+    {drawn, state, fused_logs} = ElementLogic.apply_fused_to_drawn(drawn, state, :player)
+    player = %{player | hand: player.hand ++ drawn}
+
+    state = %{state | player: player, phase: :power_up}
+    state = add_log(state, "Turn #{state.turn_number}: Drew #{length(drawn)} cards.")
+    Enum.reduce(fused_logs, state, &add_log(&2, &1))
   end
 
   # --- Battery Activation ---
@@ -171,9 +180,15 @@ defmodule Botgrade.Game.CombatLogic do
   """
   @spec enemy_turn(CombatState.t()) :: CombatState.t()
   def enemy_turn(%CombatState{phase: :enemy_turn} = state) do
+    state = ElementLogic.process_start_of_turn_elements(state, :enemy)
+
     # Shield resets at start of turn, not end — so it protects during opponent attacks
-    enemy = %{state.enemy | shield: 0} |> draw_cards(@enemy_draw_count)
-    state = %{state | enemy: enemy} |> add_log("Enemy draws #{length(enemy.hand)} cards.")
+    enemy = %{state.enemy | shield: 0}
+    {drawn, enemy} = draw_raw_cards(enemy, @enemy_draw_count)
+    {drawn, state, fused_logs} = ElementLogic.apply_fused_to_drawn(drawn, state, :enemy)
+    enemy = %{enemy | hand: enemy.hand ++ drawn}
+    state = %{state | enemy: enemy} |> add_log("Enemy draws #{length(drawn)} cards.")
+    state = Enum.reduce(fused_logs, state, &add_log(&2, &1))
 
     state = ai_use_cpu_ability(state, :pre_battery)
     state = activate_all_batteries(state, :enemy)
@@ -198,9 +213,15 @@ defmodule Botgrade.Game.CombatLogic do
   def enemy_turn_with_events(%CombatState{phase: :enemy_turn} = state) do
     events = []
 
+    state = ElementLogic.process_start_of_turn_elements(state, :enemy)
+
     # Draw phase — shield resets at start of turn so it protects during opponent attacks
-    enemy = %{state.enemy | shield: 0} |> draw_cards(@enemy_draw_count)
-    state = %{state | enemy: enemy} |> add_log("Enemy draws #{length(enemy.hand)} cards.")
+    enemy = %{state.enemy | shield: 0}
+    {drawn, enemy} = draw_raw_cards(enemy, @enemy_draw_count)
+    {drawn, state, fused_logs} = ElementLogic.apply_fused_to_drawn(drawn, state, :enemy)
+    enemy = %{enemy | hand: enemy.hand ++ drawn}
+    state = %{state | enemy: enemy} |> add_log("Enemy draws #{length(drawn)} cards.")
+    state = Enum.reduce(fused_logs, state, &add_log(&2, &1))
     events = events ++ [{state, 400}]
 
     # CPU pre-battery abilities (one event per activation)
@@ -321,12 +342,15 @@ defmodule Botgrade.Game.CombatLogic do
     # Process end-of-turn weapon effects before cleanup
     state = EndTurnEffects.process_end_of_turn_weapons(state, who)
 
+    # Process element end-of-turn effects (rust damage, clear transient statuses)
+    state = ElementLogic.process_end_of_turn_elements(state, who)
+
     {combatant, _} = get_combatants(state, who)
 
-    # Clear dice from non-capacitor card slots
+    # Clear dice from non-capacitor card slots and clear locked flags
     hand_cards = clear_dice_from_cards(combatant.hand)
 
-    # Clear activation flags, results, and shield_base_bonus
+    # Clear activation flags, results, shield_base_bonus, and locked slots
     all_cards =
       Enum.map(hand_cards, fn card ->
         card = %{card | last_result: nil}
@@ -339,7 +363,10 @@ defmodule Botgrade.Game.CombatLogic do
             true -> props
           end
 
-        %{card | properties: props}
+        # Clear locked flag from any remaining locked slots
+        updated_slots = Enum.map(card.dice_slots, &Map.delete(&1, :locked))
+
+        %{card | properties: props, dice_slots: updated_slots}
       end)
 
     # Capacitors with stored dice stay in hand for next turn
@@ -365,7 +392,7 @@ defmodule Botgrade.Game.CombatLogic do
         else: %{state | enemy: combatant}
 
     # Reset per-turn state
-    %{state | overcharge_bonus: 0, weapon_activations_this_turn: 0}
+    %{state | overcharge_bonus: 0, weapon_activations_this_turn: 0, dice_rolled_this_turn: 0, cards_drawn_this_turn: 0}
   end
 
   defp activate_all_batteries(state, :enemy) do
@@ -485,7 +512,10 @@ defmodule Botgrade.Game.CombatLogic do
 
   defp next_turn(state), do: state
 
-  defp draw_cards(robot, count) do
+  # Draws cards from the robot's deck, returning {drawn_cards, updated_robot}.
+  # The drawn cards are NOT added to hand — caller is responsible for that
+  # (allows intercepting drawn cards for element effects like Fused).
+  defp draw_raw_cards(robot, count) do
     {deck, discard} =
       if length(robot.deck) < count and length(robot.discard) > 0 do
         {Deck.shuffle_discard_into_deck(robot.deck, robot.discard), []}
@@ -494,7 +524,7 @@ defmodule Botgrade.Game.CombatLogic do
       end
 
     {drawn, remaining} = Deck.draw(deck, count)
-    %{robot | deck: remaining, hand: robot.hand ++ drawn, discard: discard}
+    {drawn, %{robot | deck: remaining, discard: discard}}
   end
 
   defp clear_dice_from_cards(cards) do

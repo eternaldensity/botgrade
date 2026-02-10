@@ -28,7 +28,9 @@ defmodule Botgrade.Game.CombatState do
           target_lock_active: boolean(),
           overclock_active: boolean(),
           overcharge_bonus: non_neg_integer(),
-          weapon_activations_this_turn: non_neg_integer()
+          weapon_activations_this_turn: non_neg_integer(),
+          dice_rolled_this_turn: non_neg_integer(),
+          cards_drawn_this_turn: non_neg_integer()
         }
 
   @enforce_keys [:id, :player, :enemy]
@@ -53,6 +55,8 @@ defmodule Botgrade.Game.CombatState do
     target_lock_active: false,
     overclock_active: false,
     overcharge_bonus: 0,
-    weapon_activations_this_turn: 0
+    weapon_activations_this_turn: 0,
+    dice_rolled_this_turn: 0,
+    cards_drawn_this_turn: 0
   ]
 end

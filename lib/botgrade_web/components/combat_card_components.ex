@@ -230,6 +230,9 @@ defmodule BotgradeWeb.CombatCardComponents do
           <div :if={Map.has_key?(@card.properties, :max_activations_per_turn)} class="text-[10px] text-base-content/50">
             {@card.properties.max_activations_per_turn}x per turn
           </div>
+          <div :if={Map.has_key?(@card.properties, :element)} class={["text-[10px] font-semibold", element_color(@card.properties.element)]}>
+            {element_label(@card.properties.element)} element
+          </div>
         </div>
       <% :armor -> %>
         <div class="space-y-0.5">
@@ -356,7 +359,27 @@ defmodule BotgradeWeb.CombatCardComponents do
       </span>
     </div>
 
-    <div :if={@slot.assigned_die == nil}>
+    <%!-- Locked slot (Fused mechanic) --%>
+    <div :if={@slot.assigned_die == nil and Map.get(@slot, :locked, false)}>
+      <button
+        :if={@phase == :power_up and @selected_die != nil}
+        phx-click="assign_die"
+        phx-value-card-id={@card.id}
+        phx-value-slot-id={@slot.id}
+        class="w-10 h-10 rounded-lg border-2 border-violet-500 bg-violet-500/20 flex flex-col items-center justify-center text-[10px] animate-pulse cursor-pointer"
+      >
+        <.icon name="hero-lock-closed-mini" class="size-4 text-violet-500" />
+      </button>
+      <div
+        :if={not (@phase == :power_up and @selected_die != nil)}
+        class="w-10 h-10 rounded-lg border-2 border-violet-500 bg-violet-500/10 flex items-center justify-center"
+      >
+        <.icon name="hero-lock-closed-mini" class="size-4 text-violet-400" />
+      </div>
+    </div>
+
+    <%!-- Normal empty slot --%>
+    <div :if={@slot.assigned_die == nil and not Map.get(@slot, :locked, false)}>
       <button
         :if={@phase == :power_up and @selected_die != nil}
         phx-click="assign_die"
@@ -637,4 +660,18 @@ defmodule BotgradeWeb.CombatCardComponents do
   defp damage_penalty_description(%{type: :cpu}), do: "Damaged: 1-in-3 chance of malfunction"
   defp damage_penalty_description(%{type: :utility}), do: "Damaged: reduced effectiveness"
   defp damage_penalty_description(_card), do: "Damaged: reduced effectiveness"
+
+  defp element_color(:fire), do: "text-orange-500"
+  defp element_color(:ice), do: "text-cyan-400"
+  defp element_color(:magnetic), do: "text-violet-500"
+  defp element_color(:dark), do: "text-gray-400"
+  defp element_color(:water), do: "text-blue-500"
+  defp element_color(_), do: "text-base-content/60"
+
+  defp element_label(:fire), do: "Fire"
+  defp element_label(:ice), do: "Ice"
+  defp element_label(:magnetic), do: "Magnetic"
+  defp element_label(:dark), do: "Dark"
+  defp element_label(:water), do: "Water"
+  defp element_label(_), do: ""
 end

@@ -67,6 +67,8 @@ defmodule Botgrade.Game.StarterDecks do
   def enemy_deck("ironclad"), do: enemy_ironclad()
   def enemy_deck("strikebolt"), do: enemy_strikebolt()
   def enemy_deck("hexapod"), do: enemy_hexapod()
+  def enemy_deck("pyroclast"), do: enemy_pyroclast()
+  def enemy_deck("specter"), do: enemy_specter()
   def enemy_deck(_), do: enemy_deck()
 
   @doc "Returns available enemy types as {id, name, description} tuples."
@@ -75,7 +77,9 @@ defmodule Botgrade.Game.StarterDecks do
       {"rogue", "Rogue Bot", "A basic scavenger bot. Balanced and predictable."},
       {"ironclad", "Ironclad", "Heavy tank with massive armor and crushing kinetic weapons."},
       {"strikebolt", "Strikebolt", "Fast glass cannon with three weapons and fragile components."},
-      {"hexapod", "Hexapod", "Versatile six-legged bot with all three damage types."}
+      {"hexapod", "Hexapod", "Versatile six-legged bot with all three damage types."},
+      {"pyroclast", "Pyroclast", "Elemental war machine wielding fire and ice. Burns your dice and freezes your rolls."},
+      {"specter", "Specter", "Phase-shifting infiltrator using magnetism and darkness. Locks your cards and hides your dice."}
     ]
   end
 
@@ -197,6 +201,99 @@ defmodule Botgrade.Game.StarterDecks do
       chassis("e_chs_3", "Leg Segment", card_hp: 2),
       cpu("e_cpu_1", "Hexapod Brain", card_hp: 3, cpu_ability: %{type: :overclock_battery}),
       locomotion("e_loc_1", "Six Legs", speed_base: 2, card_hp: 2)
+    ]
+  end
+
+  # --- Enemy: Pyroclast (Fire/Ice, high-danger) ---
+  # Total chassis HP: 9. Fire and ice elemental weapons. Burns dice and freezes rolls.
+
+  def enemy_pyroclast do
+    [
+      battery("e_bat_1", "Thermal Reactor", dice_count: 2, die_sides: 6, max_activations: 4, card_hp: 2),
+      battery("e_bat_2", "Cryo Cell", dice_count: 1, die_sides: 6, max_activations: 5, card_hp: 2),
+      weapon("e_wpn_1", "Flamethrower",
+        damage_base: 0,
+        damage_type: :energy,
+        slots: 1,
+        card_hp: 3,
+        element: :fire,
+        element_stacks: 1,
+        targeting: %{chassis: 25, weapon: 20, armor: 15, battery: 15, locomotion: 10, capacitor: 10, cpu: 5}
+      ),
+      weapon("e_wpn_2", "Cryo Beam",
+        damage_base: 0,
+        damage_type: :energy,
+        slots: 1,
+        card_hp: 3,
+        element: :ice,
+        element_stacks: 1,
+        targeting: %{battery: 25, weapon: 20, chassis: 15, armor: 15, cpu: 10, capacitor: 10, locomotion: 5}
+      ),
+      weapon("e_wpn_3", "Thermal Lance",
+        damage_base: 1,
+        damage_type: :plasma,
+        slots: 1,
+        card_hp: 2,
+        element: :fire,
+        element_stacks: 1,
+        condition: {:min, 4},
+        targeting: %{chassis: 30, weapon: 20, armor: 15, battery: 15, cpu: 10, capacitor: 5, locomotion: 5}
+      ),
+      armor("e_arm_1", "Heat Shield", shield_base: 1, armor_type: :shield, slots: 1, card_hp: 3),
+      chassis("e_chs_1", "Pyroclast Core", card_hp: 5),
+      chassis("e_chs_2", "Pyroclast Frame", card_hp: 4),
+      cpu("e_cpu_1", "Pyroclast CPU", card_hp: 3, cpu_ability: %{type: :overclock_battery}),
+      locomotion("e_loc_1", "Thermal Jets", speed_base: 2, card_hp: 2)
+    ]
+  end
+
+  # --- Enemy: Specter (Magnetic/Dark, high-danger) ---
+  # Total chassis HP: 8. Magnetic and dark elemental weapons. Locks cards and hides dice.
+
+  def enemy_specter do
+    [
+      battery("e_bat_1", "Phase Reactor", dice_count: 2, die_sides: 6, max_activations: 4, card_hp: 2),
+      battery("e_bat_2", "Null Cell", dice_count: 1, die_sides: 4, max_activations: 6, card_hp: 2),
+      weapon("e_wpn_1", "Mag Pulse",
+        damage_base: 0,
+        damage_type: :energy,
+        slots: 1,
+        card_hp: 3,
+        element: :magnetic,
+        element_stacks: 1,
+        targeting: %{weapon: 25, battery: 20, capacitor: 15, armor: 15, chassis: 10, cpu: 10, locomotion: 5}
+      ),
+      weapon("e_wpn_2", "Shadow Emitter",
+        damage_base: 0,
+        damage_type: :plasma,
+        slots: 1,
+        card_hp: 3,
+        element: :dark,
+        element_stacks: 1,
+        targeting: %{cpu: 25, battery: 20, weapon: 20, chassis: 15, armor: 10, capacitor: 5, locomotion: 5}
+      ),
+      weapon("e_wpn_3", "EMP Grenade",
+        damage_base: 0,
+        damage_type: :energy,
+        slots: 1,
+        card_hp: 2,
+        element: :magnetic,
+        element_stacks: 2,
+        condition: {:min, 4},
+        targeting: %{battery: 30, weapon: 20, capacitor: 15, cpu: 15, armor: 10, chassis: 5, locomotion: 5}
+      ),
+      armor("e_arm_1", "Null Barrier", shield_base: 0, armor_type: :plating, slots: 1, card_hp: 3),
+      armor("e_arm_2", "Phase Shield",
+        shield_base: 1,
+        armor_type: :shield,
+        slots: 1,
+        card_hp: 2,
+        condition: :odd
+      ),
+      chassis("e_chs_1", "Specter Core", card_hp: 4),
+      chassis("e_chs_2", "Specter Frame", card_hp: 4),
+      cpu("e_cpu_1", "Specter CPU", card_hp: 3, cpu_ability: %{type: :target_lock}),
+      locomotion("e_loc_1", "Phase Legs", speed_base: 2, card_hp: 2)
     ]
   end
 
@@ -327,6 +424,102 @@ defmodule Botgrade.Game.StarterDecks do
         card_hp: 2,
         end_of_turn_effect: :lithium_mode,
         targeting: %{battery: 35, capacitor: 25, cpu: 20, weapon: 10, armor: 5, chassis: 3, locomotion: 2}
+      ),
+      # --- Elemental weapons ---
+      weapon("wpn_flamethrower", "Flamethrower",
+        damage_base: 0,
+        damage_type: :energy,
+        slots: 1,
+        card_hp: 2,
+        element: :fire,
+        element_stacks: 1,
+        targeting: %{chassis: 25, weapon: 20, armor: 15, battery: 15, locomotion: 10, capacitor: 10, cpu: 5}
+      ),
+      weapon("wpn_incendiary_launcher", "Incendiary Launcher",
+        damage_base: 1,
+        damage_type: :kinetic,
+        slots: 1,
+        card_hp: 3,
+        element: :fire,
+        element_stacks: 2,
+        condition: {:min, 4},
+        targeting: %{chassis: 30, armor: 20, weapon: 15, battery: 15, cpu: 10, capacitor: 5, locomotion: 5}
+      ),
+      weapon("wpn_cryo_beam", "Cryo Beam",
+        damage_base: 0,
+        damage_type: :energy,
+        slots: 1,
+        card_hp: 2,
+        element: :ice,
+        element_stacks: 1,
+        targeting: %{battery: 25, weapon: 20, chassis: 15, armor: 15, cpu: 10, capacitor: 10, locomotion: 5}
+      ),
+      weapon("wpn_frost_cannon", "Frost Cannon",
+        damage_base: 1,
+        damage_type: :kinetic,
+        slots: 2,
+        card_hp: 3,
+        element: :ice,
+        element_stacks: 2,
+        targeting: %{weapon: 25, battery: 20, chassis: 20, armor: 10, cpu: 10, capacitor: 10, locomotion: 5}
+      ),
+      weapon("wpn_mag_pulse", "Mag Pulse",
+        damage_base: 0,
+        damage_type: :energy,
+        slots: 1,
+        card_hp: 2,
+        element: :magnetic,
+        element_stacks: 1,
+        targeting: %{weapon: 25, battery: 20, capacitor: 15, armor: 15, chassis: 10, cpu: 10, locomotion: 5}
+      ),
+      weapon("wpn_emp_grenade", "EMP Grenade",
+        damage_base: 0,
+        damage_type: :energy,
+        slots: 1,
+        card_hp: 2,
+        element: :magnetic,
+        element_stacks: 2,
+        condition: {:min, 4},
+        targeting: %{battery: 30, weapon: 20, capacitor: 15, cpu: 15, armor: 10, chassis: 5, locomotion: 5}
+      ),
+      weapon("wpn_shadow_emitter", "Shadow Emitter",
+        damage_base: 0,
+        damage_type: :plasma,
+        slots: 1,
+        card_hp: 2,
+        element: :dark,
+        element_stacks: 1,
+        targeting: %{cpu: 25, battery: 20, weapon: 20, chassis: 15, armor: 10, capacitor: 5, locomotion: 5}
+      ),
+      weapon("wpn_void_lance", "Void Lance",
+        damage_base: 2,
+        damage_type: :plasma,
+        slots: 1,
+        card_hp: 2,
+        element: :dark,
+        element_stacks: 1,
+        condition: {:min, 5},
+        self_damage: 1,
+        targeting: %{chassis: 30, weapon: 20, armor: 15, battery: 15, cpu: 10, capacitor: 5, locomotion: 5}
+      ),
+      weapon("wpn_corrosion_sprayer", "Corrosion Sprayer",
+        damage_base: 0,
+        damage_type: :kinetic,
+        slots: 1,
+        card_hp: 2,
+        element: :water,
+        element_stacks: 1,
+        targeting: %{armor: 30, chassis: 20, weapon: 15, locomotion: 15, battery: 10, capacitor: 5, cpu: 5}
+      ),
+      weapon("wpn_acid_jet", "Acid Jet",
+        damage_base: 0,
+        damage_type: :kinetic,
+        slots: 1,
+        card_hp: 3,
+        element: :water,
+        element_stacks: 2,
+        condition: :even,
+        targeting: %{armor: 25, chassis: 25, weapon: 20, locomotion: 10, battery: 10, capacitor: 5, cpu: 5}
       )
     ]
   end
@@ -371,9 +564,13 @@ defmodule Botgrade.Game.StarterDecks do
     slot_count = Keyword.get(opts, :slots, 1)
 
     slots =
-      Enum.map(1..slot_count, fn i ->
-        %{id: "power_#{i}", condition: Keyword.get(opts, :condition), assigned_die: nil}
-      end)
+      if slot_count > 0 do
+        Enum.map(1..slot_count, fn i ->
+          %{id: "power_#{i}", condition: Keyword.get(opts, :condition), assigned_die: nil}
+        end)
+      else
+        []
+      end
 
     properties =
       %{
@@ -388,6 +585,8 @@ defmodule Botgrade.Game.StarterDecks do
       |> maybe_put(:self_damage, Keyword.get(opts, :self_damage))
       |> maybe_put(:escalating, Keyword.get(opts, :escalating))
       |> maybe_put(:end_of_turn_effect, Keyword.get(opts, :end_of_turn_effect))
+      |> maybe_put(:element, Keyword.get(opts, :element))
+      |> maybe_put(:element_stacks, Keyword.get(opts, :element_stacks))
 
     %Card{
       id: id,

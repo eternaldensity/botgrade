@@ -9,7 +9,7 @@ defmodule Botgrade.Game.DiceLogic do
   - Immediate card activation when all slots are filled
   """
 
-  alias Botgrade.Game.{CombatState, Card, CardActivation, VictoryLogic}
+  alias Botgrade.Game.{CombatState, Card, CardActivation, ElementLogic, VictoryLogic}
 
   @doc """
   Allocates a die to a card slot during the power_up phase.
@@ -40,32 +40,58 @@ defmodule Botgrade.Game.DiceLogic do
            not (card.type in [:weapon, :armor, :utility] and card_fully_activated?(card)) ||
              {:error, "Card already activated this turn."},
          {:slot, slot_idx, slot} when not is_nil(slot) <- find_slot(card, slot_id),
-         true <- is_nil(slot.assigned_die) || {:error, "Slot already has a die."},
-         true <-
-           Card.meets_condition?(slot.condition, die.value) ||
-             {:error, "Die doesn't meet slot condition."} do
-      updated_slot = %{slot | assigned_die: die}
-      updated_slots = List.replace_at(card.dice_slots, slot_idx, updated_slot)
-      updated_card = %{card | dice_slots: updated_slots}
+         true <- is_nil(slot.assigned_die) || {:error, "Slot already has a die."} do
+      # Locked slot (Fused/Magnetic): consume die to unlock, don't assign or activate
+      if Map.get(slot, :locked, false) do
+        unlocked_slot = slot |> Map.delete(:locked) |> Map.put(:assigned_die, nil)
+        updated_slots = List.replace_at(card.dice_slots, slot_idx, unlocked_slot)
+        updated_card = %{card | dice_slots: updated_slots}
 
-      player = %{
-        player
-        | available_dice: List.delete_at(player.available_dice, die_index),
-          hand: replace_card(player.hand, card_id, updated_card)
-      }
+        player = %{
+          player
+          | available_dice: List.delete_at(player.available_dice, die_index),
+            hand: replace_card(player.hand, card_id, updated_card)
+        }
 
-      state = %{state | player: player}
-
-      # Immediate activation: when all slots filled on a weapon/armor/utility, fire it now
-      if all_slots_filled?(updated_card) and updated_card.type in [:weapon, :armor, :utility] do
         state =
-          state
-          |> CardActivation.activate_card(updated_card, :player)
-          |> VictoryLogic.check_victory()
+          %{state | player: player}
+          |> add_log("Die consumed to unlock fused slot on #{card.name}.")
 
         {:ok, state}
       else
-        {:ok, state}
+        # Normal allocation: validate condition
+        unless Card.meets_condition?(slot.condition, die.value) do
+          {:error, "Die doesn't meet slot condition."}
+        else
+          updated_slot = %{slot | assigned_die: die}
+          updated_slots = List.replace_at(card.dice_slots, slot_idx, updated_slot)
+          updated_card = %{card | dice_slots: updated_slots}
+
+          # Blazing die: deal 1 damage to the card when placed
+          {updated_card, _updated_die, blazing_log} =
+            ElementLogic.process_blazing_die(updated_card, die)
+
+          player = %{
+            player
+            | available_dice: List.delete_at(player.available_dice, die_index),
+              hand: replace_card(player.hand, card_id, updated_card)
+          }
+
+          state = %{state | player: player}
+          state = if blazing_log, do: add_log(state, blazing_log), else: state
+
+          # Immediate activation: when all slots filled on a weapon/armor/utility, fire it now
+          if all_slots_filled?(updated_card) and updated_card.type in [:weapon, :armor, :utility] do
+            state =
+              state
+              |> CardActivation.activate_card(updated_card, :player)
+              |> VictoryLogic.check_victory()
+
+            {:ok, state}
+          else
+            {:ok, state}
+          end
+        end
       end
     else
       {:die, nil} -> {:error, "Invalid die index."}
@@ -162,43 +188,65 @@ defmodule Botgrade.Game.DiceLogic do
       enemy = acc_state.enemy
       slot = hd(util_card.dice_slots)
 
-      best_die =
-        if util_card.properties.utility_ability == :overcharge do
-          # For overcharge, pick the lowest valid die (3+)
-          enemy.available_dice
-          |> Enum.with_index()
-          |> Enum.filter(fn {d, _} -> Card.meets_condition?(slot.condition, d.value) end)
-          |> Enum.sort_by(fn {d, _} -> d.value end)
-          |> List.first()
+      # If slot is locked, consume a die to unlock it first
+      {acc_state, slot, util_card} =
+        if Map.get(slot, :locked, false) and enemy.available_dice != [] do
+          [_die | rest] = enemy.available_dice
+          unlocked_slot = slot |> Map.delete(:locked) |> Map.put(:assigned_die, nil)
+          updated_card = %{util_card | dice_slots: [unlocked_slot]}
+          enemy = %{enemy | hand: replace_card(enemy.hand, util_card.id, updated_card), available_dice: rest}
+          acc_state = %{acc_state | enemy: enemy}
+          acc_state = add_log(acc_state, "Enemy uses die to unlock fused slot on #{util_card.name}.")
+          {acc_state, unlocked_slot, updated_card}
         else
-          # For beam_split, pick the highest die to get the most value
-          enemy.available_dice
-          |> Enum.with_index()
-          |> Enum.filter(fn {d, _} -> Card.meets_condition?(slot.condition, d.value) end)
-          |> Enum.sort_by(fn {d, _} -> d.value end, :desc)
-          |> List.first()
+          {acc_state, slot, util_card}
         end
 
-      case best_die do
-        nil ->
-          acc_state
+      # Skip if slot is still locked (no dice to unlock)
+      if Map.get(slot, :locked, false) do
+        acc_state
+      else
+        enemy = acc_state.enemy
 
-        {die, die_idx} ->
-          # Assign die to slot
-          updated_slot = %{slot | assigned_die: die}
-          updated_card = %{util_card | dice_slots: [updated_slot]}
+        best_die =
+          if util_card.properties.utility_ability == :overcharge do
+            enemy.available_dice
+            |> Enum.with_index()
+            |> Enum.filter(fn {d, _} -> Card.meets_condition?(slot.condition, d.value) end)
+            |> Enum.sort_by(fn {d, _} -> d.value end)
+            |> List.first()
+          else
+            enemy.available_dice
+            |> Enum.with_index()
+            |> Enum.filter(fn {d, _} -> Card.meets_condition?(slot.condition, d.value) end)
+            |> Enum.sort_by(fn {d, _} -> d.value end, :desc)
+            |> List.first()
+          end
 
-          enemy = %{
-            enemy
-            | hand: replace_card(enemy.hand, util_card.id, updated_card),
-              available_dice: List.delete_at(enemy.available_dice, die_idx)
-          }
+        case best_die do
+          nil ->
+            acc_state
 
-          acc_state = %{acc_state | enemy: enemy}
-          acc_state = add_log(acc_state, "Enemy assigns die [#{die.value}] to #{util_card.name}.")
+          {die, die_idx} ->
+            updated_slot = %{slot | assigned_die: die}
+            updated_card = %{util_card | dice_slots: [updated_slot]}
 
-          # Activate the utility
-          CardActivation.activate_utility(acc_state, updated_card, :enemy)
+            # Blazing self-damage
+            {updated_card, _die, blazing_log} =
+              ElementLogic.process_blazing_die(updated_card, die)
+
+            enemy = %{
+              enemy
+              | hand: replace_card(enemy.hand, util_card.id, updated_card),
+                available_dice: List.delete_at(enemy.available_dice, die_idx)
+            }
+
+            acc_state = %{acc_state | enemy: enemy}
+            acc_state = add_log(acc_state, "Enemy assigns die [#{die.value}] to #{util_card.name}.")
+            acc_state = if blazing_log, do: add_log(acc_state, blazing_log), else: acc_state
+
+            CardActivation.activate_utility(acc_state, updated_card, :enemy)
+        end
       end
     end)
   end
@@ -211,21 +259,47 @@ defmodule Botgrade.Game.DiceLogic do
             {r, d, l}
 
           [die | rest] ->
-            if is_nil(slot.assigned_die) and Card.meets_condition?(slot.condition, die.value) do
-              updated_slot = %{slot | assigned_die: die}
+            cond do
+              # Locked slot (Fused): consume die to unlock
+              is_nil(slot.assigned_die) and Map.get(slot, :locked, false) ->
+                unlocked_slot = slot |> Map.delete(:locked) |> Map.put(:assigned_die, nil)
 
-              updated_slots =
-                Enum.map(card.dice_slots, fn s ->
-                  if s.id == slot.id, do: updated_slot, else: s
-                end)
+                updated_slots =
+                  Enum.map(card.dice_slots, fn s ->
+                    if s.id == slot.id, do: unlocked_slot, else: s
+                  end)
 
-              updated_card = %{card | dice_slots: updated_slots}
-              hand = replace_card(r.hand, card.id, updated_card)
-              r = %{r | hand: hand}
+                updated_card = %{card | dice_slots: updated_slots}
+                hand = replace_card(r.hand, card.id, updated_card)
+                r = %{r | hand: hand}
 
-              {r, rest, l ++ ["Enemy assigns die [#{die.value}] to #{card.name}."]}
-            else
-              {r, d, l}
+                {r, rest, l ++ ["Enemy uses die to unlock fused slot on #{card.name}."]}
+
+              # Normal allocation
+              is_nil(slot.assigned_die) and Card.meets_condition?(slot.condition, die.value) ->
+                updated_slot = %{slot | assigned_die: die}
+
+                updated_slots =
+                  Enum.map(card.dice_slots, fn s ->
+                    if s.id == slot.id, do: updated_slot, else: s
+                  end)
+
+                updated_card = %{card | dice_slots: updated_slots}
+
+                # Blazing self-damage
+                {updated_card, _die, blazing_log} =
+                  ElementLogic.process_blazing_die(updated_card, die)
+
+                hand = replace_card(r.hand, card.id, updated_card)
+                r = %{r | hand: hand}
+
+                extra_logs = if blazing_log, do: [blazing_log], else: []
+
+                {r, rest,
+                 l ++ ["Enemy assigns die [#{die.value}] to #{card.name}."] ++ extra_logs}
+
+              true ->
+                {r, d, l}
             end
         end
       end)

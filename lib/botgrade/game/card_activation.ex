@@ -7,7 +7,7 @@ defmodule Botgrade.Game.CardActivation do
   the activation logic for each card type.
   """
 
-  alias Botgrade.Game.{CombatState, Card, Damage, Targeting, WeaponResolution}
+  alias Botgrade.Game.{CombatState, Card, Damage, Targeting, WeaponResolution, ElementLogic}
 
   @doc """
   Activates a card immediately based on its type.
@@ -229,6 +229,9 @@ defmodule Botgrade.Game.CardActivation do
 
           {state, attacker, log_msg}
       end
+
+    # Apply element status to defender
+    state = ElementLogic.apply_element_status(state, weapon, who)
 
     # Track weapon activations for escalating weapons
     state = %{state | weapon_activations_this_turn: state.weapon_activations_this_turn + 1}
