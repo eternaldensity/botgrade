@@ -54,6 +54,8 @@ defmodule BotgradeWeb.CampaignLive do
 
   @impl true
   def handle_event("move_to_space", %{"space-id" => space_id}, socket) do
+    socket = assign(socket, info_message: nil)
+
     case CampaignServer.move_to_space(socket.assigns.campaign_id, space_id) do
       {:combat, combat_id, _state} ->
         {:noreply,
