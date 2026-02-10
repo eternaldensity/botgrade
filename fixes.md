@@ -29,6 +29,7 @@
 * new plasma weapon that deals 2x the die value and 1 to itself
 * cpu that gives a utility card an extra activation this turn
 * new energy weapon that gets +1 damage each weapon activation this turn
+* kinetic weapon: boxing glove. requires a 2+ die and does die -2 damage, has 2 activations per turn
 
 ## element system
 * add weapons that have an element type

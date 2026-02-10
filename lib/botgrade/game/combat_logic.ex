@@ -199,15 +199,19 @@ defmodule Botgrade.Game.CombatLogic do
   end
 
   defp cpu_has_power?(robot, cpu_card) do
+    all_cards = robot.deck ++ robot.hand ++ robot.discard ++ robot.installed
+
     battery_count =
-      Enum.count(robot.hand, fn card ->
+      Enum.count(all_cards, fn card ->
         card.type == :battery and card.damage != :destroyed
       end)
+
+    cpu_slots = ceil(battery_count / 2)
 
     powered_cpus =
       robot.installed
       |> Enum.filter(fn card -> card.type == :cpu and card.damage != :destroyed end)
-      |> Enum.take(battery_count)
+      |> Enum.take(cpu_slots)
 
     Enum.any?(powered_cpus, &(&1.id == cpu_card.id))
   end
