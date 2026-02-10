@@ -50,6 +50,16 @@ defmodule BotgradeWeb.CampaignLive do
      )}
   end
 
+  @impl true
+  def handle_info({:enemies_respawned, count}, socket) do
+    msg =
+      if count == 1,
+        do: "A defeated enemy has reactivated nearby!",
+        else: "#{count} defeated enemies have reactivated nearby!"
+
+    {:noreply, assign(socket, info_message: msg)}
+  end
+
   # --- Player Actions ---
 
   @impl true

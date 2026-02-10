@@ -479,14 +479,141 @@ defmodule Botgrade.Campaign.CampaignServer do
   end
 
   defp advance_turn(state) do
-    # Future: enemy movement phase goes here
     movement_points = CampaignState.calculate_movement_points(state.player_cards)
+    new_turn = state.turn_number + 1
 
-    %{state |
-      turn_number: state.turn_number + 1,
+    state = %{state |
+      turn_number: new_turn,
       movement_points: movement_points,
       max_movement_points: movement_points
     }
+
+    if rem(new_turn, 5) == 0, do: respawn_enemies(state), else: state
+  end
+
+  # Every 5 turns, respawn the closest cleared enemy spawn on the current tile
+  # (or an adjacent tile if no cleared enemies on current tile).
+  defp respawn_enemies(state) do
+    player_tile_id = find_tile_for_space(state.tiles, state.current_space_id)
+
+    # Collect cleared enemy space IDs on the player's current tile
+    current_candidates = cleared_enemies_on_tile(state.tiles, player_tile_id)
+
+    # If none on current tile, check immediately adjacent tiles
+    candidates =
+      if current_candidates == [] do
+        adjacent_tile_ids = adjacent_tiles(state.tiles, state.zones, player_tile_id)
+
+        Enum.flat_map(adjacent_tile_ids, fn tid ->
+          cleared_enemies_on_tile(state.tiles, tid)
+        end)
+      else
+        current_candidates
+      end
+
+    if candidates == [] do
+      state
+    else
+      # BFS from player to find closest candidate(s) by graph distance
+      distances = bfs_distances(state.spaces, state.current_space_id, MapSet.new(candidates))
+      min_dist = distances |> Map.values() |> Enum.min()
+      closest = for {sid, d} <- distances, d == min_dist, do: sid
+
+      # Respawn all equally-closest cleared enemies
+      updated_spaces =
+        Enum.reduce(closest, state.spaces, fn space_id, spaces ->
+          Map.update!(spaces, space_id, &%{&1 | cleared: false})
+        end)
+
+      updated_tiles = sync_tiles_from_spaces(state.tiles, updated_spaces)
+      count = length(closest)
+
+      Phoenix.PubSub.broadcast(
+        Botgrade.PubSub,
+        "campaign:#{state.id}",
+        {:enemies_respawned, count}
+      )
+
+      %{state | spaces: updated_spaces, tiles: updated_tiles}
+    end
+  end
+
+  defp find_tile_for_space(tiles, space_id) do
+    Enum.find_value(tiles, fn {tile_id, tile} ->
+      if Map.has_key?(tile.spaces, space_id), do: tile_id
+    end)
+  end
+
+  defp cleared_enemies_on_tile(tiles, tile_id) do
+    case Map.get(tiles, tile_id) do
+      nil ->
+        []
+
+      tile ->
+        tile.spaces
+        |> Map.values()
+        |> Enum.filter(&(&1.type == :enemy and &1.cleared))
+        |> Enum.map(& &1.id)
+    end
+  end
+
+  defp adjacent_tiles(tiles, zones, tile_id) do
+    case Map.get(tiles, tile_id) do
+      nil ->
+        []
+
+      tile ->
+        zone = Map.get(zones, tile.zone_id)
+
+        if zone do
+          zone.neighbors
+          |> Enum.map(&"tile_#{&1}")
+          |> Enum.filter(&Map.has_key?(tiles, &1))
+        else
+          []
+        end
+    end
+  end
+
+  # BFS from source, returning %{space_id => distance} for all target IDs reached
+  defp bfs_distances(spaces, source_id, target_ids) do
+    bfs_loop(spaces, :queue.from_list([{source_id, 0}]), MapSet.new([source_id]), target_ids, %{})
+  end
+
+  defp bfs_loop(spaces, queue, visited, target_ids, found) do
+    case :queue.out(queue) do
+      {:empty, _} ->
+        found
+
+      {{:value, {current_id, dist}}, rest_queue} ->
+        found =
+          if MapSet.member?(target_ids, current_id),
+            do: Map.put(found, current_id, dist),
+            else: found
+
+        remaining_targets = MapSet.difference(target_ids, MapSet.new(Map.keys(found)))
+
+        if MapSet.size(remaining_targets) == 0 do
+          found
+        else
+          neighbors =
+            case Map.get(spaces, current_id) do
+              nil -> []
+              space -> space.connections
+            end
+
+          {new_queue, new_visited} =
+            Enum.reduce(neighbors, {rest_queue, visited}, fn nid, {q, v} ->
+              if MapSet.member?(v, nid) do
+                {q, v}
+              else
+                {:queue.in({nid, dist + 1}, q), MapSet.put(v, nid)}
+              end
+            end)
+
+          bfs_loop(spaces, new_queue, new_visited, target_ids, found)
+        end
+    end
   end
 
   defp sync_tiles_from_spaces(tiles, spaces) do
