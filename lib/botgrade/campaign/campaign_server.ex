@@ -1,7 +1,7 @@
 defmodule Botgrade.Campaign.CampaignServer do
   use GenServer
 
-  alias Botgrade.Game.{CampaignState, MapGenerator, ScrapLogic, StarterDecks}
+  alias Botgrade.Game.{CampaignState, MapGenerator, ScrapLogic, StarterDecks, UpgradeLogic}
   alias Botgrade.Campaign.CampaignPersistence
   alias Botgrade.Combat.CombatSupervisor
 
@@ -41,6 +41,9 @@ defmodule Botgrade.Campaign.CampaignServer do
 
   def junker_destroy_card(campaign_id, card_id),
     do: GenServer.call(via(campaign_id), {:junker_destroy_card, card_id})
+
+  def smithy_upgrade_card(campaign_id, card_id),
+    do: GenServer.call(via(campaign_id), {:smithy_upgrade_card, card_id})
 
   # --- Callbacks ---
 
@@ -259,6 +262,43 @@ defmodule Botgrade.Campaign.CampaignServer do
       auto_save(new_state)
       broadcast(new_state)
       {:reply, {:ok, scrap, new_state}, new_state, @idle_timeout}
+    else
+      {:reply, {:error, "Card not found"}, state, @idle_timeout}
+    end
+  end
+
+  @impl true
+  def handle_call({:smithy_upgrade_card, card_id}, _from, state) do
+    idx = Enum.find_index(state.player_cards, &(&1.id == card_id))
+
+    if idx do
+      card = Enum.at(state.player_cards, idx)
+
+      case UpgradeLogic.upgrade_info(card) do
+        nil ->
+          {:reply, {:error, "Card cannot be upgraded"}, state, @idle_timeout}
+
+        %{cost: cost} ->
+          if has_resources?(state.player_resources, cost) do
+            upgraded = UpgradeLogic.apply_upgrade(card)
+
+            updated_spaces = Map.update!(state.spaces, state.current_space_id, &%{&1 | cleared: true})
+            updated_tiles = sync_tiles_from_spaces(state.tiles, updated_spaces)
+
+            new_state = %{state |
+              player_cards: List.replace_at(state.player_cards, idx, upgraded),
+              player_resources: deduct_resources(state.player_resources, cost),
+              spaces: updated_spaces,
+              tiles: updated_tiles
+            }
+
+            auto_save(new_state)
+            broadcast(new_state)
+            {:reply, {:ok, new_state}, new_state, @idle_timeout}
+          else
+            {:reply, {:error, "Not enough resources"}, state, @idle_timeout}
+          end
+      end
     else
       {:reply, {:error, "Card not found"}, state, @idle_timeout}
     end

@@ -79,6 +79,9 @@ defmodule BotgradeWeb.CampaignLive do
           :junker when not space.cleared ->
             {:noreply, assign(socket, view_mode: :junker)}
 
+          :smithy when not space.cleared ->
+            {:noreply, assign(socket, view_mode: :smithy)}
+
           _ ->
             {:noreply, socket}
         end
@@ -117,6 +120,11 @@ defmodule BotgradeWeb.CampaignLive do
   end
 
   @impl true
+  def handle_event("enter_smithy", _params, socket) do
+    {:noreply, assign(socket, view_mode: :smithy)}
+  end
+
+  @impl true
   def handle_event("enter_shop", _params, socket) do
     inventory = CampaignServer.shop_cards_for_node(socket.assigns.state)
     {:noreply, assign(socket, view_mode: :shop, shop_inventory: inventory)}
@@ -141,6 +149,17 @@ defmodule BotgradeWeb.CampaignLive do
     case CampaignServer.rest_repair(socket.assigns.campaign_id, card_id) do
       {:ok, _state} ->
         {:noreply, assign(socket, error_message: nil)}
+
+      {:error, reason} ->
+        {:noreply, assign(socket, error_message: reason)}
+    end
+  end
+
+  @impl true
+  def handle_event("smithy_upgrade", %{"card-id" => card_id}, socket) do
+    case CampaignServer.smithy_upgrade_card(socket.assigns.campaign_id, card_id) do
+      {:ok, _state} ->
+        {:noreply, assign(socket, view_mode: :tile, error_message: "Card upgraded!")}
 
       {:error, reason} ->
         {:noreply, assign(socket, error_message: reason)}
@@ -296,6 +315,16 @@ defmodule BotgradeWeb.CampaignLive do
 
           <% :rest -> %>
             <.rest_panel
+              player_cards={@state.player_cards}
+              player_resources={@state.player_resources}
+            />
+
+          <% :smithy -> %>
+            <.smithy_panel
+              player_cards={@state.player_cards}
+              player_resources={@state.player_resources}
+            />
+            <.campaign_player_status
               player_cards={@state.player_cards}
               player_resources={@state.player_resources}
             />

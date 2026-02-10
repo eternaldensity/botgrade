@@ -507,6 +507,9 @@ defmodule BotgradeWeb.CampaignComponents do
         <button :if={@space.type == :junker && !@space.cleared} phx-click="enter_junker" class="btn btn-sm btn-error mt-2">
           <span>&#128465;</span> Enter Junker
         </button>
+        <button :if={@space.type == :smithy && !@space.cleared} phx-click="enter_smithy" class="btn btn-sm btn-warning mt-2">
+          <span>&#9874;</span> Enter Smithy
+        </button>
       </div>
     </div>
     """
@@ -690,6 +693,88 @@ defmodule BotgradeWeb.CampaignComponents do
     """
   end
 
+  # --- Smithy Panel ---
+
+  attr :player_cards, :list, required: true
+  attr :player_resources, :map, required: true
+
+  def smithy_panel(assigns) do
+    alias Botgrade.Game.UpgradeLogic
+
+    upgradeable =
+      assigns.player_cards
+      |> Enum.map(fn card ->
+        info = UpgradeLogic.upgrade_info(card)
+        {card, info}
+      end)
+      |> Enum.filter(fn {_card, info} -> info != nil end)
+
+    assigns = assign(assigns, :upgradeable, upgradeable)
+
+    ~H"""
+    <div class="card bg-base-100 shadow-lg border-2 border-warning/30">
+      <div class="card-body">
+        <div class="flex items-center justify-between">
+          <h2 class="card-title text-warning">
+            <span class="text-2xl">&#9874;</span>
+            Smithy
+          </h2>
+          <button phx-click="leave_space" phx-value-clear="false" class="btn btn-sm btn-outline btn-success gap-1">
+            <.icon name="hero-arrow-left" class="size-4" /> Leave
+          </button>
+        </div>
+        <p class="text-sm text-base-content/60">
+          Choose a card to upgrade. Damaged cards cannot be upgraded.
+        </p>
+
+        <div :if={@upgradeable == []} class="text-center text-base-content/50 py-4">
+          No cards available to upgrade.
+        </div>
+
+        <div :if={@upgradeable != []} class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
+          <div
+            :for={{card, info} <- @upgradeable}
+            class="rounded-xl border-2 border-base-300 p-3"
+          >
+            <div class="flex items-center gap-1.5 mb-1">
+              <span class={["font-bold", card_type_color(card.type)]}>{card.name}</span>
+              <span class="badge badge-xs badge-ghost">{card_type_short(card.type)}</span>
+            </div>
+            <div class="text-xs text-base-content/50 mb-1">
+              {card_summary(card)}
+            </div>
+            <div class="text-xs text-success font-semibold mb-2">
+              {info.description}
+            </div>
+            <% can_afford = Enum.all?(info.cost, fn {res, amt} -> Map.get(@player_resources, res, 0) >= amt end) %>
+            <div class="flex items-center justify-between">
+              <div class="flex gap-1.5 text-xs">
+                <span
+                  :for={{resource, amount} <- Enum.sort_by(info.cost, fn {k, _} -> Atom.to_string(k) end)}
+                  class={[
+                    "font-mono",
+                    if(Map.get(@player_resources, resource, 0) >= amount, do: "text-success", else: "text-error")
+                  ]}
+                >
+                  {amount} {scrap_label(resource)}
+                </span>
+              </div>
+              <button
+                phx-click="smithy_upgrade"
+                phx-value-card-id={card.id}
+                class="btn btn-xs btn-warning"
+                disabled={!can_afford}
+              >
+                Upgrade
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    """
+  end
+
   # --- Junker Panel ---
 
   attr :player_cards, :list, required: true
@@ -802,6 +887,8 @@ defmodule BotgradeWeb.CampaignComponents do
   defp space_fill(:scavenge, _), do: "#a16207"
   defp space_fill(:junker, true), do: "#6b7280"
   defp space_fill(:junker, _), do: "#dc2626"
+  defp space_fill(:smithy, true), do: "#6b7280"
+  defp space_fill(:smithy, _), do: "#f59e0b"
   defp space_fill(:edge_connector, _), do: "#4b5563"
   defp space_fill(:empty, _), do: "#374151"
   defp space_fill(_, _), do: "#374151"
@@ -815,6 +902,7 @@ defmodule BotgradeWeb.CampaignComponents do
   defp space_stroke(:event, _), do: "#60a5fa"
   defp space_stroke(:scavenge, _), do: "#ca8a04"
   defp space_stroke(:junker, _), do: "#f87171"
+  defp space_stroke(:smithy, _), do: "#fbbf24"
   defp space_stroke(:edge_connector, _), do: "#6b7280"
   defp space_stroke(:empty, _), do: "#6b7280"
   defp space_stroke(_, _), do: "#6b7280"
@@ -827,6 +915,7 @@ defmodule BotgradeWeb.CampaignComponents do
   defp space_icon(:event), do: "?"
   defp space_icon(:scavenge), do: "\u{2699}"
   defp space_icon(:junker), do: "\u{1F5D1}"
+  defp space_icon(:smithy), do: "\u{2692}"
   defp space_icon(:edge_connector), do: "\u{2192}"
   defp space_icon(:empty), do: "\u{00B7}"
   defp space_icon(_), do: "\u{00B7}"
@@ -837,6 +926,7 @@ defmodule BotgradeWeb.CampaignComponents do
   defp space_icon_class(:event), do: "text-info"
   defp space_icon_class(:scavenge), do: "text-amber-600"
   defp space_icon_class(:junker), do: "text-red-500"
+  defp space_icon_class(:smithy), do: "text-amber-400"
   defp space_icon_class(_), do: "text-base-content"
 
   defp space_type_badge(:enemy), do: "badge-error"
@@ -846,6 +936,7 @@ defmodule BotgradeWeb.CampaignComponents do
   defp space_type_badge(:exit), do: "badge-secondary"
   defp space_type_badge(:scavenge), do: "badge-warning"
   defp space_type_badge(:junker), do: "badge-error"
+  defp space_type_badge(:smithy), do: "badge-warning"
   defp space_type_badge(_), do: "badge-ghost"
 
   defp space_type_label(:start), do: "Start"
@@ -856,6 +947,7 @@ defmodule BotgradeWeb.CampaignComponents do
   defp space_type_label(:event), do: "Event"
   defp space_type_label(:scavenge), do: "Scavenge"
   defp space_type_label(:junker), do: "Junker"
+  defp space_type_label(:smithy), do: "Smithy"
   defp space_type_label(:edge_connector), do: "Zone Border"
   defp space_type_label(:empty), do: "Passage"
   defp space_type_label(_), do: "Unknown"
