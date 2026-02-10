@@ -272,7 +272,46 @@ defmodule Botgrade.Game.StarterDecks do
       cpu("cpu_reflex", "Reflex Processor", card_hp: 2, cpu_ability: %{type: :reflex_block}),
       cpu("cpu_target_lock", "Targeting Computer", card_hp: 2, cpu_ability: %{type: :target_lock}),
       cpu("cpu_overclock", "Overclock Module", card_hp: 2, cpu_ability: %{type: :overclock_battery}),
-      cpu("cpu_siphon", "Siphon Core", card_hp: 3, cpu_ability: %{type: :siphon_power})
+      cpu("cpu_siphon", "Siphon Core", card_hp: 3, cpu_ability: %{type: :siphon_power}),
+      # --- New Cards ---
+      weapon("wpn_kinetic_laser", "Kinetic Laser",
+        damage_base: 1,
+        damage_type: :kinetic,
+        slots: 1,
+        card_hp: 2,
+        condition: {:max, 3},
+        max_activations_per_turn: 3,
+        targeting: %{weapon: 20, armor: 15, battery: 15, chassis: 15, locomotion: 15, capacitor: 10, cpu: 10}
+      ),
+      weapon("wpn_boxing_glove", "Boxing Glove",
+        damage_base: -2,
+        damage_type: :kinetic,
+        slots: 1,
+        card_hp: 3,
+        condition: {:min, 2},
+        max_activations_per_turn: 2,
+        targeting: %{chassis: 25, armor: 20, weapon: 20, battery: 15, locomotion: 10, capacitor: 5, cpu: 5}
+      ),
+      weapon("wpn_nova_cannon", "Nova Cannon",
+        damage_base: 0,
+        damage_type: :plasma,
+        slots: 1,
+        card_hp: 3,
+        damage_multiplier: 2,
+        self_damage: 1,
+        targeting: %{chassis: 30, weapon: 20, armor: 15, battery: 15, cpu: 10, capacitor: 5, locomotion: 5}
+      ),
+      weapon("wpn_arc_projector", "Arc Projector",
+        damage_base: 0,
+        damage_type: :energy,
+        slots: 1,
+        card_hp: 2,
+        escalating: true,
+        targeting: %{battery: 25, capacitor: 20, weapon: 20, cpu: 15, armor: 10, chassis: 5, locomotion: 5}
+      ),
+      cpu("cpu_beam_splitter", "Beam Splitter", card_hp: 2, cpu_ability: %{type: :beam_split}, max_activations_per_turn: 2),
+      cpu("cpu_overcharge", "Overcharge Module", card_hp: 2, cpu_ability: %{type: :overcharge}),
+      cpu("cpu_extra_activation", "Boost Processor", card_hp: 2, cpu_ability: %{type: :extra_activation})
     ]
   end
 
@@ -328,6 +367,10 @@ defmodule Botgrade.Game.StarterDecks do
         targeting_profile: Keyword.get(opts, :targeting, nil)
       }
       |> maybe_put(:dual_mode, Keyword.get(opts, :dual_mode))
+      |> maybe_put(:max_activations_per_turn, Keyword.get(opts, :max_activations_per_turn))
+      |> maybe_put(:damage_multiplier, Keyword.get(opts, :damage_multiplier))
+      |> maybe_put(:self_damage, Keyword.get(opts, :self_damage))
+      |> maybe_put(:escalating, Keyword.get(opts, :escalating))
 
     %Card{
       id: id,
@@ -385,14 +428,18 @@ defmodule Botgrade.Game.StarterDecks do
   end
 
   defp cpu(id, name, opts) do
+    properties =
+      %{
+        card_hp: Keyword.get(opts, :card_hp, 2),
+        cpu_ability: Keyword.get(opts, :cpu_ability, %{type: :discard_draw, discard_count: 2, draw_count: 1})
+      }
+      |> maybe_put(:max_activations_per_turn, Keyword.get(opts, :max_activations_per_turn))
+
     %Card{
       id: id,
       name: name,
       type: :cpu,
-      properties: %{
-        card_hp: Keyword.get(opts, :card_hp, 2),
-        cpu_ability: Keyword.get(opts, :cpu_ability, %{type: :discard_draw, discard_count: 2, draw_count: 1})
-      },
+      properties: properties,
       dice_slots: []
     }
   end

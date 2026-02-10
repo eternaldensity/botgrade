@@ -84,6 +84,7 @@ defmodule BotgradeWeb.CombatComponents do
   attr(:result, :atom, required: true)
   attr(:target_lock_active, :boolean, default: false)
   attr(:overclock_active, :boolean, default: false)
+  attr(:overcharge_bonus, :integer, default: 0)
 
   def phase_controls(assigns) do
     ~H"""
@@ -100,6 +101,9 @@ defmodule BotgradeWeb.CombatComponents do
         </span>
         <span :if={@overclock_active} class="badge badge-sm badge-warning animate-pulse">
           OVERCLOCK
+        </span>
+        <span :if={@overcharge_bonus > 0} class="badge badge-sm badge-error animate-pulse">
+          OVERCHARGE +{@overcharge_bonus}
         </span>
         <span :if={@phase == :enemy_turn} class="badge badge-sm badge-error animate-pulse">
           Enemy attacking...
@@ -290,10 +294,16 @@ defmodule BotgradeWeb.CombatComponents do
 
       <%!-- Used this turn indicator for weapons/armor --%>
       <span
-        :if={@card.type in [:weapon, :armor] and not @destroyed and Map.get(@card.properties, :activated_this_turn, false)}
+        :if={@card.type in [:weapon, :armor] and not @destroyed and Map.get(@card.properties, :activated_this_turn, false) == true and not Map.has_key?(@card.properties, :max_activations_per_turn)}
         class="text-[10px] text-base-content/50"
       >
         Used this turn
+      </span>
+      <span
+        :if={@card.type in [:weapon, :armor] and not @destroyed and Map.has_key?(@card.properties, :max_activations_per_turn)}
+        class="text-[10px] text-base-content/50"
+      >
+        {Map.get(@card.properties, :activations_this_turn, 0)}/{@card.properties.max_activations_per_turn} activations
       </span>
 
       <%!-- Damage indicator strip --%>
@@ -653,6 +663,12 @@ defmodule BotgradeWeb.CombatComponents do
           <div :if={Map.has_key?(@card.properties, :dual_mode)} class="text-[10px] text-info">
             {dual_mode_label(@card.properties.dual_mode)}
           </div>
+          <div :if={Map.get(@card.properties, :self_damage, 0) > 0} class="text-[10px] text-warning">
+            Deals {@card.properties.self_damage} damage to self
+          </div>
+          <div :if={Map.has_key?(@card.properties, :max_activations_per_turn)} class="text-[10px] text-base-content/50">
+            {@card.properties.max_activations_per_turn}x per turn
+          </div>
         </div>
       <% :armor -> %>
         <div class="space-y-0.5">
@@ -991,6 +1007,9 @@ defmodule BotgradeWeb.CombatComponents do
   defp cpu_ability_label(%{type: :target_lock}), do: "Target Lock"
   defp cpu_ability_label(%{type: :overclock_battery}), do: "Overclock"
   defp cpu_ability_label(%{type: :siphon_power}), do: "Siphon Power"
+  defp cpu_ability_label(%{type: :beam_split}), do: "Beam Split"
+  defp cpu_ability_label(%{type: :overcharge}), do: "Overcharge"
+  defp cpu_ability_label(%{type: :extra_activation}), do: "Boost"
   defp cpu_ability_label(_), do: "Processing Unit"
 
   defp card_matches_targeting_mode?(card, :select_hand_cards) do
@@ -1009,10 +1028,13 @@ defmodule BotgradeWeb.CombatComponents do
 
   defp cpu_targeting_instruction(:select_hand_cards), do: "Select cards to discard"
   defp cpu_targeting_instruction(:select_installed_card), do: "Select a card to target"
+  defp cpu_targeting_instruction(:select_die_to_split), do: "Tap a die to split"
+  defp cpu_targeting_instruction(:select_die_to_spend), do: "Tap a 3+ die to spend"
   defp cpu_targeting_instruction(_), do: ""
 
   defp cpu_targeting_label(%{type: :reflex_block}), do: "Select armor to boost (+1 shield)"
   defp cpu_targeting_label(%{type: :siphon_power}), do: "Select battery to restore (costs 2 shield)"
+  defp cpu_targeting_label(%{type: :extra_activation}), do: "Select a used card to reactivate"
   defp cpu_targeting_label(_), do: "Select a target"
 
   defp condition_label({:min, n}), do: "#{n}+"
@@ -1044,7 +1066,7 @@ defmodule BotgradeWeb.CombatComponents do
           not Map.get(card.properties, :activated_this_turn, false) ->
         true
 
-      card.type in [:weapon, :armor] and Map.get(card.properties, :activated_this_turn, false) ->
+      card.type in [:weapon, :armor] and card_fully_activated_ui?(card) ->
         false
 
       card.dice_slots != [] and Enum.any?(card.dice_slots, &(&1.assigned_die == nil)) ->
@@ -1056,6 +1078,16 @@ defmodule BotgradeWeb.CombatComponents do
   end
 
   defp card_interactable?(_card, _phase), do: false
+
+  defp card_fully_activated_ui?(card) do
+    max_per_turn = Map.get(card.properties, :max_activations_per_turn)
+
+    if max_per_turn do
+      Map.get(card.properties, :activations_this_turn, 0) >= max_per_turn
+    else
+      Map.get(card.properties, :activated_this_turn, false)
+    end
+  end
 
   # --- Scrap Helpers ---
 
@@ -1082,11 +1114,30 @@ defmodule BotgradeWeb.CombatComponents do
   defp weapon_damage_formula(card) do
     base = card.properties.damage_base
     slot_count = length(card.dice_slots)
+    multiplier = Map.get(card.properties, :damage_multiplier, 1)
 
-    dice_part = if slot_count == 1, do: "die", else: "#{slot_count} dice"
-    base_part = if base > 0, do: " + #{base}", else: ""
+    dice_part =
+      cond do
+        multiplier > 1 and slot_count == 1 -> "die x#{multiplier}"
+        multiplier > 1 -> "#{slot_count} dice x#{multiplier}"
+        slot_count == 1 -> "die"
+        true -> "#{slot_count} dice"
+      end
 
-    "#{dice_part}#{base_part}"
+    base_part =
+      cond do
+        base > 0 -> " + #{base}"
+        base < 0 -> " - #{abs(base)}"
+        true -> ""
+      end
+
+    extra =
+      cond do
+        Map.get(card.properties, :escalating, false) -> " (+1/wpn)"
+        true -> ""
+      end
+
+    "#{dice_part}#{base_part}#{extra}"
   end
 
   defp armor_formula(card) do
@@ -1142,6 +1193,15 @@ defmodule BotgradeWeb.CombatComponents do
 
   defp cpu_ability_description(%{type: :siphon_power}),
     do: "Spend 2 shield to restore a battery charge"
+
+  defp cpu_ability_description(%{type: :beam_split}),
+    do: "Split a die into two halves (2 uses/turn)"
+
+  defp cpu_ability_description(%{type: :overcharge}),
+    do: "Spend a 3+ die: weapons deal +1 damage this turn"
+
+  defp cpu_ability_description(%{type: :extra_activation}),
+    do: "Give a used card an extra activation"
 
   defp cpu_ability_description(_), do: ""
 

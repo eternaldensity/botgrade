@@ -556,12 +556,29 @@ defmodule BotgradeWeb.CampaignComponents do
       :weapon ->
         dmg_type = Map.get(card.properties, :damage_type, :kinetic)
         base = Map.get(card.properties, :damage_base, 0)
+        multiplier = Map.get(card.properties, :damage_multiplier, 1)
         slot_count = length(card.dice_slots)
-        dice_part = if slot_count == 1, do: "die", else: "#{slot_count} dice"
-        base_part = if base > 0, do: " + #{base}", else: ""
+        dice_part =
+          cond do
+            multiplier > 1 and slot_count == 1 -> "die x#{multiplier}"
+            multiplier > 1 -> "#{slot_count} dice x#{multiplier}"
+            slot_count == 1 -> "die"
+            true -> "#{slot_count} dice"
+          end
+        base_part =
+          cond do
+            base > 0 -> " + #{base}"
+            base < 0 -> " - #{abs(base)}"
+            true -> ""
+          end
         cond_part = slot_condition_summary(card)
         dual_part = dual_mode_summary(card)
-        "#{String.capitalize(to_string(dmg_type))} #{dice_part}#{base_part}#{cond_part}#{dual_part}"
+        max_acts = Map.get(card.properties, :max_activations_per_turn)
+        acts_part = if max_acts, do: " (#{max_acts}x)", else: ""
+        self_dmg = Map.get(card.properties, :self_damage, 0)
+        self_part = if self_dmg > 0, do: " [self: #{self_dmg}]", else: ""
+        escalating = if Map.get(card.properties, :escalating, false), do: " (+1/wpn)", else: ""
+        "#{String.capitalize(to_string(dmg_type))} #{dice_part}#{base_part}#{cond_part}#{dual_part}#{acts_part}#{self_part}#{escalating}"
 
       :armor ->
         armor_type = Map.get(card.properties, :armor_type, :plating)
@@ -634,6 +651,9 @@ defmodule BotgradeWeb.CampaignComponents do
   defp cpu_ability_summary(%{type: :target_lock}), do: "Next weapon bypasses defenses"
   defp cpu_ability_summary(%{type: :overclock_battery}), do: "Next battery activates twice"
   defp cpu_ability_summary(%{type: :siphon_power}), do: "Spend 2 shield to restore a charge"
+  defp cpu_ability_summary(%{type: :beam_split}), do: "Split a die into two halves (2x/turn)"
+  defp cpu_ability_summary(%{type: :overcharge}), do: "Spend 3+ die for +1 weapon damage"
+  defp cpu_ability_summary(%{type: :extra_activation}), do: "Reactivate a used card"
   defp cpu_ability_summary(_), do: "Processing Unit"
 
   defp scrap_label(:metal), do: "Metal"
