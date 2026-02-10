@@ -158,16 +158,37 @@ defmodule BotgradeWeb.CampaignComponents do
           opacity={if edge.cross_tile, do: "0.3", else: if(edge.traversed, do: "0.7", else: "0.4")}
         />
 
-        <%!-- Adjacent tile spaces (faded) --%>
-        <g :for={space <- @adjacent_spaces} opacity="0.25">
+        <%!-- Adjacent tile spaces (faded, but clickable if reachable) --%>
+        <g :for={space <- @adjacent_spaces}>
           <% {sx, sy} = space.position %>
+          <% is_reachable = MapSet.member?(@reachable_ids, space.id) %>
+
+          <%!-- Reachable highlight for cross-tile spaces --%>
+          <circle
+            :if={is_reachable}
+            cx={sx}
+            cy={sy}
+            r="16"
+            fill="none"
+            stroke="#facc15"
+            stroke-width="2"
+            stroke-dasharray="4,3"
+            opacity="0.7"
+          >
+            <animate attributeName="stroke-dashoffset" values="0;14" dur="1.5s" repeatCount="indefinite" />
+          </circle>
+
           <circle
             cx={sx}
             cy={sy}
-            r="10"
+            r={if is_reachable, do: "12", else: "10"}
             fill={space_fill(space.type, space.cleared)}
             stroke={space_stroke(space.type, false)}
             stroke-width="1"
+            opacity={if is_reachable, do: "0.8", else: "0.25"}
+            class={if is_reachable, do: "cursor-pointer", else: ""}
+            phx-click={if is_reachable, do: "move_to_space"}
+            phx-value-space-id={if is_reachable, do: space.id}
           />
           <text
             x={sx}
@@ -176,8 +197,21 @@ defmodule BotgradeWeb.CampaignComponents do
             font-size="10"
             fill="white"
             pointer-events="none"
+            opacity={if is_reachable, do: "0.9", else: "0.25"}
           >
             {space_icon(space.type)}
+          </text>
+          <text
+            :if={is_reachable}
+            x={sx}
+            y={sy + 22}
+            text-anchor="middle"
+            font-size="7"
+            fill="currentColor"
+            opacity="0.6"
+            pointer-events="none"
+          >
+            {space.label}
           </text>
         </g>
 

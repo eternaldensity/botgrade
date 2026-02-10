@@ -7,8 +7,8 @@ defmodule Botgrade.Game.TileGenerator do
 
   alias Botgrade.Game.{Space, Tile, Zone}
 
-  @cell_width 250.0
-  @cell_height 200.0
+  @cell_width 400.0
+  @cell_height 350.0
 
   @space_type_weights [enemy: 50, shop: 15, rest: 15, event: 20]
 
@@ -105,16 +105,16 @@ defmodule Botgrade.Game.TileGenerator do
   end
 
   defp edge_position(:north, base_x, base_y),
-    do: {base_x + @cell_width / 2, base_y + 15.0}
+    do: {base_x + @cell_width / 2, base_y + 25.0}
 
   defp edge_position(:south, base_x, base_y),
-    do: {base_x + @cell_width / 2, base_y + @cell_height - 15.0}
+    do: {base_x + @cell_width / 2, base_y + @cell_height - 25.0}
 
   defp edge_position(:east, base_x, base_y),
-    do: {base_x + @cell_width - 15.0, base_y + @cell_height / 2}
+    do: {base_x + @cell_width - 25.0, base_y + @cell_height / 2}
 
   defp edge_position(:west, base_x, base_y),
-    do: {base_x + 15.0, base_y + @cell_height / 2}
+    do: {base_x + 25.0, base_y + @cell_height / 2}
 
   defp edge_label(:north), do: "North Border"
   defp edge_label(:south), do: "South Border"
@@ -159,8 +159,8 @@ defmodule Botgrade.Game.TileGenerator do
         ix = ecx + (cx - ecx) * t + jitter(10)
         iy = ecy + (cy - ecy) * t + jitter(10)
         # Clamp within tile bounds
-        ix = clamp(ix, base_x + 20, base_x + @cell_width - 20)
-        iy = clamp(iy, base_y + 20, base_y + @cell_height - 20)
+        ix = clamp(ix, base_x + 35, base_x + @cell_width - 35)
+        iy = clamp(iy, base_y + 35, base_y + @cell_height - 35)
 
         %Space{
           id: "#{zone.id}_mid_#{ec.id |> String.split("_ec_") |> List.last()}",
@@ -206,9 +206,9 @@ defmodule Botgrade.Game.TileGenerator do
 
       # Place in a random direction from anchor
       angle = :rand.uniform() * 2 * :math.pi()
-      dist = 30.0 + :rand.uniform() * 25.0
-      nx = clamp(ax + :math.cos(angle) * dist, base_x + 20, base_x + @cell_width - 20)
-      ny = clamp(ay + :math.sin(angle) * dist, base_y + 20, base_y + @cell_height - 20)
+      dist = 55.0 + :rand.uniform() * 40.0
+      nx = clamp(ax + :math.cos(angle) * dist, base_x + 35, base_x + @cell_width - 35)
+      ny = clamp(ay + :math.sin(angle) * dist, base_y + 35, base_y + @cell_height - 35)
 
       space = %Space{
         id: "#{zone.id}_extra_#{i}",
