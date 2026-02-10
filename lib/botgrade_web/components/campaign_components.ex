@@ -596,6 +596,7 @@ defmodule BotgradeWeb.CampaignComponents do
             <div class="text-xs text-base-content/60 mb-2">
               {card_summary(card)}
             </div>
+            <% can_afford = Enum.all?(price, fn {res, amt} -> Map.get(@player_resources, res, 0) >= amt end) %>
             <div class="flex items-center justify-between">
               <div class="flex gap-1.5 text-xs">
                 <span
@@ -612,6 +613,7 @@ defmodule BotgradeWeb.CampaignComponents do
                 phx-click="shop_buy"
                 phx-value-card-index={idx}
                 class="btn btn-xs btn-warning"
+                disabled={!can_afford}
               >
                 Buy
               </button>
