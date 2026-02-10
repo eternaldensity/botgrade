@@ -34,13 +34,17 @@ defmodule BotgradeWeb.CampaignComponents do
       if current_tile do
         cur = Map.values(current_tile.spaces)
 
-        # Find adjacent tiles via edge connectors
+        # Find adjacent tiles: follow cross-tile connections from local edge connectors
         adj_zone_ids =
           current_tile.edge_connectors
           |> Map.values()
           |> Enum.reject(&is_nil/1)
-          |> Enum.map(fn ec_id ->
-            space = Map.get(assigns.spaces, ec_id)
+          |> Enum.flat_map(fn ec_id ->
+            ec = Map.get(assigns.spaces, ec_id)
+            if ec, do: ec.connections, else: []
+          end)
+          |> Enum.map(fn conn_id ->
+            space = Map.get(assigns.spaces, conn_id)
             space && space.zone_id
           end)
           |> Enum.reject(&is_nil/1)
