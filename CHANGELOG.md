@@ -25,6 +25,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Clear last_result on cards during turn cleanup (#4)
 
 ### Changed
+- Split combat_components.ex into card vs layout modules (#31)
 - Write project README.md (#30)
 - Add plasma lobber and lithium mode weapon cards (#28)
 - Clean up phase controls: remove power up text, restyle turn counter (#27)
