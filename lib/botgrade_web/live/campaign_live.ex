@@ -71,6 +71,11 @@ defmodule BotgradeWeb.CampaignLive do
             {text, reward_label} = random_event(space)
             {:noreply, assign(socket, view_mode: :event, event_data: %{text: text, reward: reward_label, space: space})}
 
+          :scavenge when not space.cleared ->
+            {reward_label, resources} = scavenge_loot(space)
+            CampaignServer.scavenge(socket.assigns.campaign_id, resources)
+            {:noreply, assign(socket, error_message: "Scavenged: #{reward_label}")}
+
           _ ->
             {:noreply, socket}
         end

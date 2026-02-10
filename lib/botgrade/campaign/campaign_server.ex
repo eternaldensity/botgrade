@@ -36,6 +36,9 @@ defmodule Botgrade.Campaign.CampaignServer do
   def clear_current_space(campaign_id),
     do: GenServer.call(via(campaign_id), :clear_current_space)
 
+  def scavenge(campaign_id, resources),
+    do: GenServer.call(via(campaign_id), {:scavenge, resources})
+
   # --- Callbacks ---
 
   @impl true
@@ -202,6 +205,27 @@ defmodule Botgrade.Campaign.CampaignServer do
     else
       {:reply, {:error, "Invalid card"}, state, @idle_timeout}
     end
+  end
+
+  @impl true
+  def handle_call({:scavenge, resources}, _from, state) do
+    updated_spaces = Map.update!(state.spaces, state.current_space_id, &%{&1 | cleared: true})
+    updated_tiles = sync_tiles_from_spaces(state.tiles, updated_spaces)
+
+    new_resources =
+      Enum.reduce(resources, state.player_resources, fn {k, v}, acc ->
+        Map.update(acc, k, v, &(&1 + v))
+      end)
+
+    new_state = %{state |
+      spaces: updated_spaces,
+      tiles: updated_tiles,
+      player_resources: new_resources
+    }
+
+    auto_save(new_state)
+    broadcast(new_state)
+    {:reply, {:ok, new_state}, new_state, @idle_timeout}
   end
 
   @impl true

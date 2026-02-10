@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- Convert dead-end empty spaces to scavenge type (#36)
 - Label spaces by connection count (#33)
 - Quick combat enemy scaling every 5 combats (#23)
 - Add back-to-menu navigation to quick combat (#22)

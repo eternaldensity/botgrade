@@ -27,7 +27,7 @@ defmodule Botgrade.Game.TileGenerator do
     event: ["Signal Source", "Data Cache", "Anomaly", "Unknown Contact", "Wreckage Site"],
     start: ["Entry Point"],
     exit: ["Research Lab"],
-    empty_dead_end: ["Dead End", "Alcove", "Nook"],
+    scavenge: ["Salvage Pile", "Scrap Cache", "Supply Stash", "Wreckage"],
     empty_passage: ["Passage", "Corridor", "Open Street", "Walkway"],
     empty_junction: ["Junction", "Crossroads", "Intersection", "Hub"],
     edge_connector: ["Zone Border"]
@@ -299,18 +299,21 @@ defmodule Botgrade.Game.TileGenerator do
     end
   end
 
-  # Assign labels to empty spaces based on their actual connection count
+  # Assign labels to empty spaces based on connection count.
+  # Dead-end empties become scavenge spots (rewarding exploration).
   defp fix_empty_labels(spaces) do
     Enum.map(spaces, fn space ->
       if space.type == :empty do
-        label_pool =
-          case length(space.connections) do
-            n when n <= 1 -> @space_labels[:empty_dead_end]
-            2 -> @space_labels[:empty_passage]
-            _ -> @space_labels[:empty_junction]
-          end
+        case length(space.connections) do
+          n when n <= 1 ->
+            %{space | type: :scavenge, label: Enum.random(@space_labels[:scavenge])}
 
-        %{space | label: Enum.random(label_pool)}
+          2 ->
+            %{space | label: Enum.random(@space_labels[:empty_passage])}
+
+          _ ->
+            %{space | label: Enum.random(@space_labels[:empty_junction])}
+        end
       else
         space
       end

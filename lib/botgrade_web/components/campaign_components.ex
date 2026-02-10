@@ -732,6 +732,8 @@ defmodule BotgradeWeb.CampaignComponents do
   defp space_fill(:rest, _), do: "#22c55e"
   defp space_fill(:event, true), do: "#6b7280"
   defp space_fill(:event, _), do: "#3b82f6"
+  defp space_fill(:scavenge, true), do: "#6b7280"
+  defp space_fill(:scavenge, _), do: "#a16207"
   defp space_fill(:edge_connector, _), do: "#4b5563"
   defp space_fill(:empty, _), do: "#374151"
   defp space_fill(_, _), do: "#374151"
@@ -743,6 +745,7 @@ defmodule BotgradeWeb.CampaignComponents do
   defp space_stroke(:shop, _), do: "#fbbf24"
   defp space_stroke(:rest, _), do: "#4ade80"
   defp space_stroke(:event, _), do: "#60a5fa"
+  defp space_stroke(:scavenge, _), do: "#ca8a04"
   defp space_stroke(:edge_connector, _), do: "#6b7280"
   defp space_stroke(:empty, _), do: "#6b7280"
   defp space_stroke(_, _), do: "#6b7280"
@@ -753,6 +756,7 @@ defmodule BotgradeWeb.CampaignComponents do
   defp space_icon(:shop), do: "\u{1F6D2}"
   defp space_icon(:rest), do: "\u{1F527}"
   defp space_icon(:event), do: "?"
+  defp space_icon(:scavenge), do: "\u{2699}"
   defp space_icon(:edge_connector), do: "\u{2192}"
   defp space_icon(:empty), do: "\u{00B7}"
   defp space_icon(_), do: "\u{00B7}"
@@ -761,6 +765,7 @@ defmodule BotgradeWeb.CampaignComponents do
   defp space_icon_class(:shop), do: "text-warning"
   defp space_icon_class(:rest), do: "text-success"
   defp space_icon_class(:event), do: "text-info"
+  defp space_icon_class(:scavenge), do: "text-amber-600"
   defp space_icon_class(_), do: "text-base-content"
 
   defp space_type_badge(:enemy), do: "badge-error"
@@ -768,6 +773,7 @@ defmodule BotgradeWeb.CampaignComponents do
   defp space_type_badge(:rest), do: "badge-success"
   defp space_type_badge(:event), do: "badge-info"
   defp space_type_badge(:exit), do: "badge-secondary"
+  defp space_type_badge(:scavenge), do: "badge-warning"
   defp space_type_badge(_), do: "badge-ghost"
 
   defp space_type_label(:start), do: "Start"
@@ -776,6 +782,7 @@ defmodule BotgradeWeb.CampaignComponents do
   defp space_type_label(:shop), do: "Shop"
   defp space_type_label(:rest), do: "Rest"
   defp space_type_label(:event), do: "Event"
+  defp space_type_label(:scavenge), do: "Scavenge"
   defp space_type_label(:edge_connector), do: "Zone Border"
   defp space_type_label(:empty), do: "Passage"
   defp space_type_label(_), do: "Unknown"
@@ -930,6 +937,20 @@ defmodule BotgradeWeb.CampaignComponents do
   defp scrap_label(:plastic), do: "Plastic"
   defp scrap_label(:grease), do: "Grease"
   defp scrap_label(:chips), do: "Chips"
+
+  @scavenge_loot [
+    {"+1 Metal", %{metal: 1}},
+    {"+1 Wire", %{wire: 1}},
+    {"+1 Plastic", %{plastic: 1}},
+    {"+1 Grease", %{grease: 1}},
+    {"+1 Metal, +1 Wire", %{metal: 1, wire: 1}},
+    {"+1 Metal, +1 Plastic", %{metal: 1, plastic: 1}}
+  ]
+
+  def scavenge_loot(space) do
+    idx = :erlang.phash2(space.id, length(@scavenge_loot))
+    Enum.at(@scavenge_loot, idx)
+  end
 
   @events [
     {"You find a stash of scrap metal hidden in a collapsed storefront.", "+2 Metal", %{metal: 2}},

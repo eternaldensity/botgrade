@@ -5,7 +5,7 @@ defmodule Botgrade.Game.Space do
   """
 
   @type space_type ::
-          :empty | :enemy | :shop | :rest | :event | :start | :exit | :edge_connector
+          :empty | :enemy | :shop | :rest | :event | :scavenge | :start | :exit | :edge_connector
   @type enemy_behavior :: :stationary | :patrol
 
   @type t :: %__MODULE__{
