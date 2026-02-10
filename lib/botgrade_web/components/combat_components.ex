@@ -428,6 +428,7 @@ defmodule BotgradeWeb.CombatComponents do
   attr(:cpu_discard_selected, :list, default: [])
   attr(:cpu_targeting_mode, :atom, default: nil)
   attr(:cpu_selected_installed, :string, default: nil)
+  attr(:cpu_ability_type, :atom, default: nil)
 
   def card_area(assigns) do
     assigns =
@@ -455,6 +456,7 @@ defmodule BotgradeWeb.CombatComponents do
               cpu_discard_selected={@cpu_discard_selected}
               cpu_targeting_mode={@cpu_targeting_mode}
               cpu_selected_installed={@cpu_selected_installed}
+              cpu_ability_type={@cpu_ability_type}
             />
           </div>
         </div>

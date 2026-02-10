@@ -21,6 +21,7 @@ defmodule BotgradeWeb.CombatCardComponents do
   attr(:cpu_discard_selected, :list, default: [])
   attr(:cpu_targeting_mode, :atom, default: nil)
   attr(:cpu_selected_installed, :string, default: nil)
+  attr(:cpu_ability_type, :atom, default: nil)
 
   def game_card(assigns) do
     interactable = card_interactable?(assigns.card, assigns.phase)
@@ -28,7 +29,7 @@ defmodule BotgradeWeb.CombatCardComponents do
 
     cpu_selectable =
       not is_nil(assigns.cpu_targeting) and not destroyed and
-        card_matches_targeting_mode?(assigns.card, assigns.cpu_targeting_mode)
+        card_matches_targeting_mode?(assigns.card, assigns.cpu_targeting_mode, assigns.cpu_ability_type)
 
     cpu_selected =
       assigns.card.id in assigns.cpu_discard_selected or
@@ -507,15 +508,25 @@ defmodule BotgradeWeb.CombatCardComponents do
     end
   end
 
-  defp card_matches_targeting_mode?(card, :select_hand_cards) do
+  defp card_matches_targeting_mode?(card, :select_hand_cards, _ability_type) do
     not Map.get(card.properties, :activated_this_turn, false)
   end
 
-  defp card_matches_targeting_mode?(card, :select_installed_card) do
-    card.type in [:armor, :battery]
+  defp card_matches_targeting_mode?(card, :select_installed_card, :reflex_block) do
+    card.type == :armor
   end
 
-  defp card_matches_targeting_mode?(_card, _), do: false
+  defp card_matches_targeting_mode?(card, :select_installed_card, :siphon_power) do
+    card.type == :battery and
+      card.properties.remaining_activations < card.properties.max_activations
+  end
+
+  defp card_matches_targeting_mode?(card, :select_installed_card, :extra_activation) do
+    card.type in [:weapon, :armor, :utility] and
+      Map.get(card.properties, :activated_this_turn, false)
+  end
+
+  defp card_matches_targeting_mode?(_card, _, _), do: false
 
   defp cpu_click_event(:select_hand_cards), do: "toggle_cpu_discard"
   defp cpu_click_event(:select_installed_card), do: "select_cpu_target_card"

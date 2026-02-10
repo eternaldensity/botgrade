@@ -218,6 +218,14 @@ defmodule BotgradeWeb.CombatLive do
     die_value = selected_die_value(assigns.selected_die, assigns.state.player.available_dice)
     assigns = assign(assigns, :die_value, die_value)
 
+    cpu_ability_type =
+      if assigns.state.cpu_targeting do
+        cpu_card = Enum.find(assigns.state.player.installed, &(&1.id == assigns.state.cpu_targeting))
+        if cpu_card, do: cpu_card.properties.cpu_ability.type
+      end
+
+    assigns = assign(assigns, :cpu_ability_type, cpu_ability_type)
+
     ~H"""
     <div class="min-h-screen bg-base-200 flex flex-col">
       <%!-- Quick combat nav when status bar is hidden --%>
@@ -301,6 +309,7 @@ defmodule BotgradeWeb.CombatLive do
           cpu_discard_selected={@state.cpu_discard_selected}
           cpu_targeting_mode={@state.cpu_targeting_mode}
           cpu_selected_installed={@state.cpu_selected_installed}
+          cpu_ability_type={@cpu_ability_type}
           scrollable
         />
       </div>
