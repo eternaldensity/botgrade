@@ -116,6 +116,8 @@ defmodule Botgrade.Game.CombatLogic do
             {:error, "No stored die to boost."}
 
           true ->
+            boost = Map.get(card.properties, :boost_amount, 1)
+
             max_val =
               if card.damage == :damaged,
                 do: Card.damaged_capacitor_max_value(),
@@ -125,8 +127,14 @@ defmodule Botgrade.Game.CombatLogic do
               Enum.map_reduce(card.dice_slots, false, fn slot, already_boosted ->
                 case slot.assigned_die do
                   %{value: v} = die when not already_boosted ->
-                    new_val = if max_val && v >= max_val, do: v, else: v + 1
-                    {%{slot | assigned_die: %{die | value: new_val}}, true}
+                    new_val =
+                      if max_val, do: min(v + boost, max_val), else: v + boost
+
+                    if new_val == v do
+                      {slot, false}
+                    else
+                      {%{slot | assigned_die: %{die | value: new_val}}, true}
+                    end
 
                   _ ->
                     {slot, already_boosted}

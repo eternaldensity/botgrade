@@ -569,6 +569,7 @@ defmodule Botgrade.Game.StarterDecks do
       properties: %{
         max_stored: 1,
         capacitor_ability: :dynamo,
+        boost_amount: 1,
         card_hp: Keyword.get(opts, :card_hp, 2)
       },
       dice_slots: [%{id: "store_1", condition: nil, assigned_die: nil}]

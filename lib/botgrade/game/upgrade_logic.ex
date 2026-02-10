@@ -71,12 +71,16 @@ defmodule Botgrade.Game.UpgradeLogic do
   end
 
   def apply_upgrade(%Card{type: :capacitor} = card) do
-    new_max = Map.get(card.properties, :max_stored, 2) + 1
-    new_slot = %{id: "store_#{new_max}", condition: nil, assigned_die: nil}
+    if Map.get(card.properties, :capacitor_ability) == :dynamo do
+      update_prop(card, :boost_amount, &(&1 + 1))
+    else
+      new_max = Map.get(card.properties, :max_stored, 2) + 1
+      new_slot = %{id: "store_#{new_max}", condition: nil, assigned_die: nil}
 
-    card
-    |> update_prop(:max_stored, &(&1 + 1))
-    |> Map.update!(:dice_slots, &(&1 ++ [new_slot]))
+      card
+      |> update_prop(:max_stored, &(&1 + 1))
+      |> Map.update!(:dice_slots, &(&1 ++ [new_slot]))
+    end
   end
 
   def apply_upgrade(%Card{type: :chassis} = card) do
@@ -127,8 +131,13 @@ defmodule Botgrade.Game.UpgradeLogic do
   end
 
   defp upgrade_description(%Card{type: :capacitor} = card) do
-    stored = Map.get(card.properties, :max_stored, 2)
-    "+1 storage slot (#{stored} -> #{stored + 1})"
+    if Map.get(card.properties, :capacitor_ability) == :dynamo do
+      boost = Map.get(card.properties, :boost_amount, 1)
+      "+1 boost per activation (+#{boost} -> +#{boost + 1})"
+    else
+      stored = Map.get(card.properties, :max_stored, 2)
+      "+1 storage slot (#{stored} -> #{stored + 1})"
+    end
   end
 
   defp upgrade_description(%Card{type: :chassis} = card) do

@@ -117,7 +117,7 @@ defmodule BotgradeWeb.CombatCardComponents do
         class="btn btn-sm btn-info w-full"
       >
         <.icon name="hero-arrow-trending-up" class="size-4" />
-        Boost +1
+        Boost +{Map.get(@card.properties, :boost_amount, 1)}
       </button>
       <span
         :if={@card.type == :capacitor and Map.get(@card.properties, :capacitor_ability) == :dynamo and not @destroyed and Map.get(@card.properties, :activated_this_turn, false)}
@@ -230,7 +230,7 @@ defmodule BotgradeWeb.CombatCardComponents do
             (max {Card.damaged_capacitor_max_value()})
           </span>
           <div :if={Map.get(@card.properties, :capacitor_ability) == :dynamo} class="text-[10px] text-info">
-            Activate: stored die +1 (1x/turn)
+            Activate: stored die +{Map.get(@card.properties, :boost_amount, 1)} (1x/turn)
           </div>
           <div class="text-[10px] text-base-content/50">Stored dice persist between turns</div>
         </div>
