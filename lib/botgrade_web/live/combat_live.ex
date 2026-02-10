@@ -56,6 +56,14 @@ defmodule BotgradeWeb.CombatLive do
   end
 
   @impl true
+  def handle_event("activate_capacitor", %{"card-id" => card_id}, socket) do
+    case CombatServer.activate_capacitor(socket.assigns.combat_id, card_id) do
+      {:ok, _state} -> {:noreply, assign(socket, error_message: nil)}
+      {:error, reason} -> {:noreply, assign(socket, error_message: reason)}
+    end
+  end
+
+  @impl true
   def handle_event("activate_cpu", %{"card-id" => card_id}, socket) do
     case CombatServer.activate_cpu(socket.assigns.combat_id, card_id) do
       {:ok, _state} -> {:noreply, assign(socket, error_message: nil)}

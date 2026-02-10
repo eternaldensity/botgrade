@@ -109,6 +109,23 @@ defmodule BotgradeWeb.CombatCardComponents do
         Activate
       </button>
 
+      <%!-- Dynamo Activation Button --%>
+      <button
+        :if={@card.type == :capacitor and Map.get(@card.properties, :capacitor_ability) == :dynamo and @phase == :power_up and not @destroyed and not @cpu_selectable and not Map.get(@card.properties, :activated_this_turn, false) and Enum.any?(@card.dice_slots, &(&1.assigned_die != nil))}
+        phx-click="activate_capacitor"
+        phx-value-card-id={@card.id}
+        class="btn btn-sm btn-info w-full"
+      >
+        <.icon name="hero-arrow-trending-up" class="size-4" />
+        Boost +1
+      </button>
+      <span
+        :if={@card.type == :capacitor and Map.get(@card.properties, :capacitor_ability) == :dynamo and not @destroyed and Map.get(@card.properties, :activated_this_turn, false)}
+        class="text-[10px] text-base-content/50"
+      >
+        Boosted this turn
+      </span>
+
       <%!-- Activation Result (shown on in-play cards) --%>
       <div :if={@card.last_result} class="flex items-center gap-1.5 text-xs border-t border-base-300/50 pt-1.5 -mb-0.5">
         <div class="flex gap-0.5">
@@ -208,10 +225,13 @@ defmodule BotgradeWeb.CombatCardComponents do
         </div>
       <% :capacitor -> %>
         <div class="space-y-0.5">
-          <span>Stores {length(@card.dice_slots)} dice</span>
+          <span>Stores {length(@card.dice_slots)} {if length(@card.dice_slots) == 1, do: "die", else: "dice"}</span>
           <span :if={@card.damage == :damaged} class="text-warning text-[10px]">
             (max {Card.damaged_capacitor_max_value()})
           </span>
+          <div :if={Map.get(@card.properties, :capacitor_ability) == :dynamo} class="text-[10px] text-info">
+            Activate: stored die +1 (1x/turn)
+          </div>
           <div class="text-[10px] text-base-content/50">Stored dice persist between turns</div>
         </div>
       <% :weapon -> %>
@@ -486,6 +506,11 @@ defmodule BotgradeWeb.CombatCardComponents do
       card.type == :battery and
         card.properties.remaining_activations > 0 and
           not Map.get(card.properties, :activated_this_turn, false) ->
+        true
+
+      card.type == :capacitor and Map.get(card.properties, :capacitor_ability) == :dynamo and
+        not Map.get(card.properties, :activated_this_turn, false) and
+          Enum.any?(card.dice_slots, &(&1.assigned_die != nil)) ->
         true
 
       card.type in [:weapon, :armor, :utility] and card_fully_activated_ui?(card) ->

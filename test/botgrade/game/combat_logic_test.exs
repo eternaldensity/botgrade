@@ -20,9 +20,9 @@ defmodule Botgrade.Game.CombatLogicTest do
       assert Robot.current_hp(state.enemy) == 9
     end
 
-    test "player deck has 8 non-installed cards" do
+    test "player deck has 9 non-installed cards" do
       state = new_combat()
-      assert length(state.player.deck) == 8
+      assert length(state.player.deck) == 9
     end
 
     test "enemy deck has 5 non-installed cards" do
@@ -41,7 +41,7 @@ defmodule Botgrade.Game.CombatLogicTest do
     test "draws 5 cards into hand and transitions to power_up" do
       state = new_combat() |> CombatLogic.draw_phase()
       assert length(state.player.hand) == 5
-      assert length(state.player.deck) == 3
+      assert length(state.player.deck) == 4
       assert state.phase == :power_up
     end
   end

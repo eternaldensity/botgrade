@@ -15,6 +15,9 @@ defmodule Botgrade.Combat.CombatServer do
   def activate_battery(combat_id, card_id),
     do: GenServer.call(via(combat_id), {:activate_battery, card_id})
 
+  def activate_capacitor(combat_id, card_id),
+    do: GenServer.call(via(combat_id), {:activate_capacitor, card_id})
+
   def activate_cpu(combat_id, card_id),
     do: GenServer.call(via(combat_id), {:activate_cpu, card_id})
 
@@ -69,6 +72,18 @@ defmodule Botgrade.Combat.CombatServer do
   @impl true
   def handle_call({:activate_battery, card_id}, _from, state) do
     case CombatLogic.activate_battery(state, card_id) do
+      {:ok, new_state} ->
+        broadcast(new_state)
+        {:reply, {:ok, new_state}, new_state}
+
+      {:error, reason} ->
+        {:reply, {:error, reason}, state}
+    end
+  end
+
+  @impl true
+  def handle_call({:activate_capacitor, card_id}, _from, state) do
+    case CombatLogic.activate_capacitor(state, card_id) do
       {:ok, new_state} ->
         broadcast(new_state)
         {:reply, {:ok, new_state}, new_state}

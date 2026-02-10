@@ -7,6 +7,7 @@ defmodule Botgrade.Game.StarterDecks do
       battery("bat_2", "Small Battery", dice_count: 1, die_sides: 6, max_activations: 5, card_hp: 2),
       battery("bat_3", "Medium Battery", dice_count: 2, die_sides: 4, max_activations: 4, card_hp: 3),
       capacitor("cap_1", "Basic Capacitor", max_stored: 2, card_hp: 2),
+      dynamo("cap_dynamo", "Dynamo", card_hp: 2),
       weapon("wpn_1", "Arm Blaster",
         damage_base: 0,
         damage_type: :energy,
@@ -557,6 +558,20 @@ defmodule Botgrade.Game.StarterDecks do
         card_hp: Keyword.get(opts, :card_hp, 2)
       },
       dice_slots: slots
+    }
+  end
+
+  defp dynamo(id, name, opts) do
+    %Card{
+      id: id,
+      name: name,
+      type: :capacitor,
+      properties: %{
+        max_stored: 1,
+        capacitor_ability: :dynamo,
+        card_hp: Keyword.get(opts, :card_hp, 2)
+      },
+      dice_slots: [%{id: "store_1", condition: nil, assigned_die: nil}]
     }
   end
 

@@ -85,6 +85,77 @@ defmodule Botgrade.Game.CombatLogic do
           {:ok, CombatState.t()} | {:error, String.t()}
   defdelegate activate_battery(state, card_id), to: BatteryLogic
 
+  # --- Capacitor Abilities ---
+
+  @doc """
+  Activates a capacitor ability (e.g. Dynamo: +1 to stored die value).
+  """
+  @spec activate_capacitor(CombatState.t(), String.t()) ::
+          {:ok, CombatState.t()} | {:error, String.t()}
+  def activate_capacitor(%CombatState{phase: :power_up} = state, card_id) do
+    player = state.player
+
+    case Enum.find(player.hand, &(&1.id == card_id)) do
+      nil ->
+        {:error, "Card not found."}
+
+      %Card{type: :capacitor, damage: :destroyed} ->
+        {:error, "Card is destroyed."}
+
+      %Card{type: :capacitor} = card ->
+        ability = Map.get(card.properties, :capacitor_ability)
+
+        cond do
+          ability != :dynamo ->
+            {:error, "Card has no activation ability."}
+
+          Map.get(card.properties, :activated_this_turn, false) ->
+            {:error, "Already activated this turn."}
+
+          not Enum.any?(card.dice_slots, &(&1.assigned_die != nil)) ->
+            {:error, "No stored die to boost."}
+
+          true ->
+            max_val =
+              if card.damage == :damaged,
+                do: Card.damaged_capacitor_max_value(),
+                else: nil
+
+            {updated_slots, boosted?} =
+              Enum.map_reduce(card.dice_slots, false, fn slot, already_boosted ->
+                case slot.assigned_die do
+                  %{value: v} = die when not already_boosted ->
+                    new_val = if max_val && v >= max_val, do: v, else: v + 1
+                    {%{slot | assigned_die: %{die | value: new_val}}, true}
+
+                  _ ->
+                    {slot, already_boosted}
+                end
+              end)
+
+            if not boosted? do
+              {:error, "Cannot boost die (at maximum)."}
+            else
+              boosted_die = Enum.find(updated_slots, &(&1.assigned_die != nil)).assigned_die
+              props = Map.put(card.properties, :activated_this_turn, true)
+              updated_card = %{card | dice_slots: updated_slots, properties: props}
+              player = %{player | hand: replace_card(player.hand, card_id, updated_card)}
+
+              state =
+                %{state | player: player}
+                |> add_log("Dynamo activated! Stored die boosted to #{boosted_die.value}.")
+
+              {:ok, state}
+            end
+        end
+
+      _ ->
+        {:error, "Not a capacitor."}
+    end
+  end
+
+  def activate_capacitor(_state, _card_id), do: {:error, "Not in power up phase."}
+
   # --- CPU Abilities ---
 
   @doc """
