@@ -217,7 +217,7 @@ defmodule BotgradeWeb.CampaignLive do
     case CampaignServer.junker_destroy_card(socket.assigns.campaign_id, card_id) do
       {:ok, scrap, _state} ->
         label = Botgrade.Game.ScrapLogic.format_resources(scrap)
-        {:noreply, assign(socket, view_mode: :tile, info_message: "Junked card! Gained: #{label}")}
+        {:noreply, assign(socket, info_message: "Junked card! Gained: #{label}")}
 
       {:error, reason} ->
         {:noreply, assign(socket, error_message: reason)}
