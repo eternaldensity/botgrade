@@ -460,7 +460,7 @@ defmodule BotgradeWeb.CampaignComponents do
           <span class="mx-1">|</span>
           <span>Danger: {danger_stars(@space.danger_rating)}</span>
         </div>
-        <div :if={@space.type == :enemy and @space.enemy_type and not @space.cleared} class="text-sm mt-1">
+        <div :if={@space.type == :enemy && @space.enemy_type && !@space.cleared} class="text-sm mt-1">
           <span class="text-error font-semibold">Enemy: {enemy_display_name(@space.enemy_type)}</span>
         </div>
       </div>
