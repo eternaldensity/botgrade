@@ -7,14 +7,14 @@ defmodule Botgrade.Game.MapGenerator do
   alias Botgrade.Game.{ZoneGenerator, TileGenerator, Zone}
 
   @start_zone_pos {0, 1}
-  @exit_zone_pos {3, 1}
+  @exit_zone_pos {7, 1}
 
   @doc """
   Generate a complete campaign map.
 
   Options:
     - `:seed` - integer seed for reproducible generation (default: random)
-    - `:grid_cols` - zone grid width (default 4)
+    - `:grid_cols` - zone grid width (default 8)
     - `:grid_rows` - zone grid height (default 3)
 
   Returns `{zones, tiles, spaces, seed}`.

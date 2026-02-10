@@ -1,14 +1,14 @@
 defmodule Botgrade.Game.ZoneGenerator do
   @moduledoc """
   Generates a grid of zones for the campaign map from a seed.
-  Produces a 4x3 grid with ~75% fill, adjacency constraints,
+  Produces an 8x3 grid with ~75% fill, adjacency constraints,
   and a danger gradient from start (left) to exit (right).
   """
 
   alias Botgrade.Game.Zone
 
   @zone_types [:industrial, :residential, :commercial]
-  @grid_cols 4
+  @grid_cols 8
   @grid_rows 3
 
   @doc """
