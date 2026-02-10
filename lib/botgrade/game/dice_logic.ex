@@ -67,9 +67,18 @@ defmodule Botgrade.Game.DiceLogic do
           updated_slots = List.replace_at(card.dice_slots, slot_idx, updated_slot)
           updated_card = %{card | dice_slots: updated_slots}
 
-          # Blazing die: deal 1 damage to the card when placed
-          {updated_card, _updated_die, blazing_log} =
+          # Blazing die: deal 1 damage to the card when placed, remove blazing flag
+          {updated_card, cleaned_die, blazing_log} =
             ElementLogic.process_blazing_die(updated_card, die)
+
+          # Update the slot's die to the cleaned version (blazing flag removed)
+          updated_card =
+            if cleaned_die != die do
+              cleaned_slot = %{slot | assigned_die: cleaned_die}
+              %{updated_card | dice_slots: List.replace_at(updated_card.dice_slots, slot_idx, cleaned_slot)}
+            else
+              updated_card
+            end
 
           player = %{
             player
@@ -231,9 +240,16 @@ defmodule Botgrade.Game.DiceLogic do
             updated_slot = %{slot | assigned_die: die}
             updated_card = %{util_card | dice_slots: [updated_slot]}
 
-            # Blazing self-damage
-            {updated_card, _die, blazing_log} =
+            # Blazing self-damage + remove blazing flag from die in slot
+            {updated_card, cleaned_die, blazing_log} =
               ElementLogic.process_blazing_die(updated_card, die)
+
+            updated_card =
+              if cleaned_die != die do
+                %{updated_card | dice_slots: [%{updated_slot | assigned_die: cleaned_die}]}
+              else
+                updated_card
+              end
 
             enemy = %{
               enemy
@@ -286,9 +302,21 @@ defmodule Botgrade.Game.DiceLogic do
 
                 updated_card = %{card | dice_slots: updated_slots}
 
-                # Blazing self-damage
-                {updated_card, _die, blazing_log} =
+                # Blazing self-damage + remove blazing flag from die in slot
+                {updated_card, cleaned_die, blazing_log} =
                   ElementLogic.process_blazing_die(updated_card, die)
+
+                updated_card =
+                  if cleaned_die != die do
+                    cleaned_slots =
+                      Enum.map(updated_card.dice_slots, fn s ->
+                        if s.id == slot.id, do: %{s | assigned_die: cleaned_die}, else: s
+                      end)
+
+                    %{updated_card | dice_slots: cleaned_slots}
+                  else
+                    updated_card
+                  end
 
                 hand = replace_card(r.hand, card.id, updated_card)
                 r = %{r | hand: hand}
