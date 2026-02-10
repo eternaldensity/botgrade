@@ -63,35 +63,41 @@ defmodule Botgrade.Game.ZoneGenerator do
   end
 
   # BFS to ensure start and exit are connected. If not, add bridge cells.
+  # Then prune any cells not reachable from start to eliminate islands.
   defp ensure_connectivity(cells, start, target, cols, rows) do
-    if connected?(cells, start, target) do
-      cells
-    else
-      # Add cells along the middle row to bridge the gap
-      mid = div(rows, 2)
-      bridge = for col <- 0..(cols - 1), do: {col, mid}
-      MapSet.union(cells, MapSet.new(bridge))
-    end
+    connected_cells =
+      if connected?(cells, start, target) do
+        cells
+      else
+        mid = div(rows, 2)
+        bridge = for col <- 0..(cols - 1), do: {col, mid}
+        MapSet.union(cells, MapSet.new(bridge))
+      end
+
+    # Flood-fill from start and keep only reachable cells
+    reachable = flood_fill(connected_cells, start)
+    MapSet.intersection(connected_cells, reachable)
   end
 
   defp connected?(cells, start, target) do
-    bfs([start], MapSet.new([start]), cells, target)
+    reachable = flood_fill(cells, start)
+    MapSet.member?(reachable, target)
   end
 
-  defp bfs([], _visited, _cells, _target), do: false
+  defp flood_fill(cells, start) do
+    do_flood([start], MapSet.new([start]), cells)
+  end
 
-  defp bfs(queue, visited, cells, target) do
-    if target in queue do
-      true
-    else
-      next =
-        queue
-        |> Enum.flat_map(&grid_neighbors/1)
-        |> Enum.filter(&(MapSet.member?(cells, &1) and not MapSet.member?(visited, &1)))
-        |> Enum.uniq()
+  defp do_flood([], visited, _cells), do: visited
 
-      bfs(next, MapSet.union(visited, MapSet.new(next)), cells, target)
-    end
+  defp do_flood(queue, visited, cells) do
+    next =
+      queue
+      |> Enum.flat_map(&grid_neighbors/1)
+      |> Enum.filter(&(MapSet.member?(cells, &1) and not MapSet.member?(visited, &1)))
+      |> Enum.uniq()
+
+    do_flood(next, MapSet.union(visited, MapSet.new(next)), cells)
   end
 
   defp grid_neighbors({col, row}) do
