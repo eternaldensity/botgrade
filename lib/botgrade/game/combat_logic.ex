@@ -1187,7 +1187,131 @@ defmodule Botgrade.Game.CombatLogic do
 
   # --- Cleanup ---
 
+  defp process_end_of_turn_weapons(state, who) do
+    {combatant, _opponent} = get_combatants(state, who)
+
+    # Find all installed end-of-turn effect weapons that aren't destroyed
+    eot_weapons =
+      combatant.installed
+      |> Enum.filter(&(&1.type == :weapon))
+      |> Enum.filter(&(&1.damage != :destroyed))
+      |> Enum.filter(&Map.has_key?(&1.properties, :end_of_turn_effect))
+
+    Enum.reduce(eot_weapons, state, fn weapon, acc_state ->
+      process_end_of_turn_weapon(acc_state, weapon, who)
+    end)
+  end
+
+  defp process_end_of_turn_weapon(state, weapon, who) do
+    {combatant, opponent} = get_combatants(state, who)
+    effect = weapon.properties.end_of_turn_effect
+
+    case effect do
+      :plasma_lobber ->
+        unused_dice_count = length(combatant.available_dice)
+        damage = unused_dice_count * 2
+
+        if damage > 0 do
+          targetable = Targeting.targetable_cards(opponent)
+          target = Targeting.select_target(weapon.properties.targeting_profile, targetable)
+
+          if target do
+            {updated_opponent, updated_target, card_dmg, absorb_msg} =
+              Damage.apply_typed_damage(opponent, target, damage, :plasma)
+
+            # Update the target card in the appropriate zone
+            updated_opponent =
+              cond do
+                Enum.any?(updated_opponent.installed, &(&1.id == updated_target.id)) ->
+                  %{updated_opponent | installed: replace_card(updated_opponent.installed, updated_target.id, updated_target)}
+
+                Enum.any?(updated_opponent.hand, &(&1.id == updated_target.id)) ->
+                  %{updated_opponent | hand: replace_card(updated_opponent.hand, updated_target.id, updated_target)}
+
+                true ->
+                  updated_opponent
+              end
+
+            state = put_combatants(state, who, combatant, updated_opponent)
+            add_log(state, "#{weapon.name}: #{unused_dice_count} unused dice → #{damage} plasma damage to #{updated_target.name} (#{card_dmg} dealt)#{absorb_msg}!")
+          else
+            state
+          end
+        else
+          state
+        end
+
+      :lithium_mode ->
+        # Find all batteries in hand with no remaining charges
+        depleted_batteries =
+          combatant.hand
+          |> Enum.filter(&(&1.type == :battery))
+          |> Enum.filter(&(&1.damage != :destroyed))
+          |> Enum.filter(&(&1.properties.remaining_activations == 0))
+
+        if length(depleted_batteries) > 0 do
+          # Deal 5 energy damage per depleted battery
+          total_damage = length(depleted_batteries) * 5
+
+          targetable = Targeting.targetable_cards(opponent)
+          target = Targeting.select_target(weapon.properties.targeting_profile, targetable)
+
+          {state, target_name} =
+            if target do
+              {updated_opponent, updated_target, card_dmg, absorb_msg} =
+                Damage.apply_typed_damage(opponent, target, total_damage, :energy)
+
+              # Update the target card in the appropriate zone
+              updated_opponent =
+                cond do
+                  Enum.any?(updated_opponent.installed, &(&1.id == updated_target.id)) ->
+                    %{updated_opponent | installed: replace_card(updated_opponent.installed, updated_target.id, updated_target)}
+
+                  Enum.any?(updated_opponent.hand, &(&1.id == updated_target.id)) ->
+                    %{updated_opponent | hand: replace_card(updated_opponent.hand, updated_target.id, updated_target)}
+
+                  true ->
+                    updated_opponent
+                end
+
+              state = put_combatants(state, who, combatant, updated_opponent)
+              {state, "#{updated_target.name} (#{card_dmg} dealt)#{absorb_msg}"}
+            else
+              {state, nil}
+            end
+
+          # Destroy the depleted batteries
+          battery_names = Enum.map_join(depleted_batteries, ", ", & &1.name)
+          battery_ids = Enum.map(depleted_batteries, & &1.id)
+
+          {combatant, _} = get_combatants(state, who)
+          combatant = %{
+            combatant
+            | hand: Enum.reject(combatant.hand, &(&1.id in battery_ids)),
+              discard: combatant.discard ++ Enum.map(depleted_batteries, &%{&1 | damage: :destroyed})
+          }
+
+          {_, opponent} = get_combatants(state, who)
+          state = put_combatants(state, who, combatant, opponent)
+
+          if target_name do
+            add_log(state, "#{weapon.name}: Destroyed #{length(depleted_batteries)} depleted batteries (#{battery_names}) → #{total_damage} energy damage to #{target_name}!")
+          else
+            add_log(state, "#{weapon.name}: Destroyed #{length(depleted_batteries)} depleted batteries (#{battery_names}).")
+          end
+        else
+          state
+        end
+
+      _ ->
+        state
+    end
+  end
+
   defp cleanup_turn(state, who) do
+    # Process end-of-turn weapon effects before cleanup
+    state = process_end_of_turn_weapons(state, who)
+
     {combatant, _} = get_combatants(state, who)
 
     # Clear dice from non-capacitor card slots

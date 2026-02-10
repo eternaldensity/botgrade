@@ -25,6 +25,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Clear last_result on cards during turn cleanup (#4)
 
 ### Changed
+- Add plasma lobber and lithium mode weapon cards (#28)
 - Clean up phase controls: remove power up text, restyle turn counter (#27)
 - Fix overlapping menu/fight badge with enemy status bar (#25)
 - Combat clarity: plating vs shields, unified power phase, immediate activation, damage display (#3)

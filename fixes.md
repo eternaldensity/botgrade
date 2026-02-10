@@ -23,13 +23,8 @@
 
 # new stuff
 ## more cards
-* ~~add beam splitter utility card: cut a die into two. 2 activations per turn~~
-* ~~add a kinetic laser weapon which needs a 3 die or less, and deals 1 damage, can activate 3 time per turn~~
-* ~~add an overcharge utility card: spend a die 3 or greater: your attacks deal +1 damage this turn~~
-* ~~new plasma weapon that deals 2x the die value and 1 to itself~~
-* ~~cpu that gives a utility card an extra activation this turn~~
-* ~~new energy weapon that gets +1 damage each weapon activation this turn~~
-* ~~kinetic weapon: boxing glove. requires a 2+ die and does die -2 damage, has 2 activations per turn~~
+* ~~weapon: plasma lobber. at end of turn deal plasma damage of 2x unused dice~~ (added to expanded_card_pool)
+* ~~weapon: lithium mode. at end of turn, for each battery in hand with no remaining charges: destroy it and deal 5 energy damage~~ (added to expanded_card_pool)
 
 ## element system
 * add weapons that have an element type

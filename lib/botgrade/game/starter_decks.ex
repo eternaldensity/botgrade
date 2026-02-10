@@ -311,7 +311,23 @@ defmodule Botgrade.Game.StarterDecks do
       ),
       utility("utl_beam_splitter", "Beam Splitter", card_hp: 2, utility_ability: :beam_split, max_activations_per_turn: 2),
       utility("utl_overcharge", "Overcharge Module", card_hp: 2, utility_ability: :overcharge, condition: {:min, 3}),
-      cpu("cpu_extra_activation", "Boost Processor", card_hp: 2, cpu_ability: %{type: :extra_activation})
+      cpu("cpu_extra_activation", "Boost Processor", card_hp: 2, cpu_ability: %{type: :extra_activation}),
+      weapon("wpn_plasma_lobber", "Plasma Lobber",
+        damage_base: 0,
+        damage_type: :plasma,
+        slots: 0,
+        card_hp: 2,
+        end_of_turn_effect: :plasma_lobber,
+        targeting: %{chassis: 30, weapon: 20, armor: 15, battery: 15, cpu: 10, capacitor: 5, locomotion: 5}
+      ),
+      weapon("wpn_lithium_mode", "Lithium Mode",
+        damage_base: 0,
+        damage_type: :energy,
+        slots: 0,
+        card_hp: 2,
+        end_of_turn_effect: :lithium_mode,
+        targeting: %{battery: 35, capacitor: 25, cpu: 20, weapon: 10, armor: 5, chassis: 3, locomotion: 2}
+      )
     ]
   end
 
@@ -371,6 +387,7 @@ defmodule Botgrade.Game.StarterDecks do
       |> maybe_put(:damage_multiplier, Keyword.get(opts, :damage_multiplier))
       |> maybe_put(:self_damage, Keyword.get(opts, :self_damage))
       |> maybe_put(:escalating, Keyword.get(opts, :escalating))
+      |> maybe_put(:end_of_turn_effect, Keyword.get(opts, :end_of_turn_effect))
 
     %Card{
       id: id,
