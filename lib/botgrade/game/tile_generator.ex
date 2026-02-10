@@ -27,7 +27,9 @@ defmodule Botgrade.Game.TileGenerator do
     event: ["Signal Source", "Data Cache", "Anomaly", "Unknown Contact", "Wreckage Site"],
     start: ["Entry Point"],
     exit: ["Research Lab"],
-    empty: ["Crossroads", "Open Street", "Junction", "Passage"],
+    empty_dead_end: ["Dead End", "Alcove", "Nook"],
+    empty_passage: ["Passage", "Corridor", "Open Street", "Walkway"],
+    empty_junction: ["Junction", "Crossroads", "Intersection", "Hub"],
     edge_connector: ["Zone Border"]
   }
 
@@ -61,6 +63,9 @@ defmodule Botgrade.Game.TileGenerator do
 
     # Step 6: Apply connections
     all_spaces_list = apply_connections(all_spaces_list, connections)
+
+    # Step 7: Fix empty space labels based on actual connection count
+    all_spaces_list = fix_empty_labels(all_spaces_list)
 
     # Build space map
     spaces = Map.new(all_spaces_list, fn s -> {s.id, s} end)
@@ -130,7 +135,7 @@ defmodule Botgrade.Game.TileGenerator do
       cond do
         is_start -> {:start, Enum.random(@space_labels[:start])}
         is_exit -> {:exit, Enum.random(@space_labels[:exit])}
-        true -> {:empty, Enum.random(@space_labels[:empty])}
+        true -> {:empty, "Passage"}
       end
 
     %Space{
@@ -167,7 +172,7 @@ defmodule Botgrade.Game.TileGenerator do
           type: :empty,
           position: {ix, iy},
           zone_id: zone.id,
-          label: Enum.random(@space_labels[:empty]),
+          label: "Passage",
           danger_rating: zone.danger_rating
         }
       end)
@@ -215,7 +220,7 @@ defmodule Botgrade.Game.TileGenerator do
         type: :empty,
         position: {nx, ny},
         zone_id: zone.id,
-        label: Enum.random(@space_labels[:empty]),
+        label: "Passage",
         danger_rating: zone.danger_rating
       }
 
@@ -292,6 +297,24 @@ defmodule Botgrade.Game.TileGenerator do
       other ->
         %{space | type: other, label: Enum.random(@space_labels[other])}
     end
+  end
+
+  # Assign labels to empty spaces based on their actual connection count
+  defp fix_empty_labels(spaces) do
+    Enum.map(spaces, fn space ->
+      if space.type == :empty do
+        label_pool =
+          case length(space.connections) do
+            n when n <= 1 -> @space_labels[:empty_dead_end]
+            2 -> @space_labels[:empty_passage]
+            _ -> @space_labels[:empty_junction]
+          end
+
+        %{space | label: Enum.random(label_pool)}
+      else
+        space
+      end
+    end)
   end
 
   # Apply bidirectional connections to spaces
