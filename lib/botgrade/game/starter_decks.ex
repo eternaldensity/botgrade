@@ -463,6 +463,32 @@ defmodule Botgrade.Game.StarterDecks do
     }
   end
 
+  @doc """
+  Returns bonus enemy cards for quick combat scaling.
+  Every 5 combats, enemies get 1 extra item.
+  Odd multiples of 5: extra card from the enemy's own deck.
+  Even multiples of 5: random card from the expanded pool.
+  """
+  def bonus_enemy_cards(combat_number, enemy_type) when combat_number >= 1 do
+    bonus_count = div(combat_number - 1, 5)
+    if bonus_count == 0, do: [], else: build_bonus_cards(bonus_count, enemy_type)
+  end
+
+  defp build_bonus_cards(count, enemy_type) do
+    enemy_cards = enemy_deck(enemy_type)
+    pool_cards = expanded_card_pool()
+
+    Enum.map(1..count, fn i ->
+      # Odd bonuses (1st, 3rd, 5th...) come from enemy's own deck
+      # Even bonuses (2nd, 4th, 6th...) come from the full pool
+      source = if rem(i, 2) == 1, do: enemy_cards, else: pool_cards
+      card = Enum.random(source)
+      # Give each bonus card a unique ID to avoid collisions
+      suffix = Base.encode16(:crypto.strong_rand_bytes(3), case: :lower)
+      %{card | id: "bonus_#{suffix}"}
+    end)
+  end
+
   defp maybe_put(map, _key, nil), do: map
   defp maybe_put(map, key, value), do: Map.put(map, key, value)
 end

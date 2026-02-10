@@ -30,7 +30,14 @@ defmodule BotgradeWeb.CombatLive do
   @impl true
   def handle_params(params, _uri, socket) do
     campaign_id = params["campaign_id"] || socket.assigns.campaign_id
-    {:noreply, assign(socket, campaign_id: campaign_id)}
+
+    combat_number =
+      case params["combat_number"] do
+        nil -> socket.assigns[:combat_number] || 1
+        n -> String.to_integer(n)
+      end
+
+    {:noreply, assign(socket, campaign_id: campaign_id, combat_number: combat_number)}
   end
 
   @impl true
@@ -181,16 +188,18 @@ defmodule BotgradeWeb.CombatLive do
     player = socket.assigns.state.player
     player_cards = player.installed ++ player.deck ++ player.hand ++ player.discard
     combat_id = Base.encode16(:crypto.strong_rand_bytes(4), case: :lower)
+    next_number = socket.assigns.combat_number + 1
 
     {enemy_type, _name, _desc} = Enum.random(Botgrade.Game.StarterDecks.enemy_types())
     enemy_cards = Botgrade.Game.StarterDecks.enemy_deck(enemy_type)
+    bonus_cards = Botgrade.Game.StarterDecks.bonus_enemy_cards(next_number, enemy_type)
 
     {:ok, _pid} = CombatSupervisor.start_combat(combat_id,
       player_cards: player_cards,
       player_resources: player.resources,
-      enemy_cards: enemy_cards
+      enemy_cards: enemy_cards ++ bonus_cards
     )
-    {:noreply, push_navigate(socket, to: ~p"/combat/#{combat_id}")}
+    {:noreply, push_navigate(socket, to: ~p"/combat/#{combat_id}?combat_number=#{next_number}")}
   end
 
   @impl true
@@ -211,12 +220,13 @@ defmodule BotgradeWeb.CombatLive do
 
     ~H"""
     <div class="min-h-screen bg-base-200 flex flex-col">
-      <%!-- Back to Menu (quick combat only) --%>
-      <div :if={is_nil(@campaign_id)} class="absolute top-2 left-2 z-50">
+      <%!-- Back to Menu + Combat Counter (quick combat only) --%>
+      <div :if={is_nil(@campaign_id)} class="absolute top-2 left-2 z-50 flex items-center gap-2">
         <.link navigate={~p"/"} class="btn btn-ghost btn-sm gap-1 text-base-content/60 hover:text-base-content">
           <.icon name="hero-arrow-left-mini" class="size-4" />
           Menu
         </.link>
+        <span class="badge badge-sm badge-neutral">Fight {@combat_number}</span>
       </div>
 
       <%!-- Enemy Status (sticky top) --%>
