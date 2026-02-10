@@ -510,6 +510,9 @@ defmodule BotgradeWeb.CampaignComponents do
         <button :if={@space.type == :smithy && !@space.cleared} phx-click="enter_smithy" class="btn btn-sm btn-warning mt-2">
           <span>&#9874;</span> Enter Smithy
         </button>
+        <button :if={@space.type == :charger} phx-click="enter_charger" class="btn btn-sm btn-info mt-2">
+          <span>&#9889;</span> Enter Charger
+        </button>
       </div>
     </div>
     """
@@ -688,6 +691,185 @@ defmodule BotgradeWeb.CampaignComponents do
             Leave Repair Bay
           </button>
         </div>
+      </div>
+    </div>
+    """
+  end
+
+  # --- Charger Panel ---
+
+  attr :player_cards, :list, required: true
+  attr :player_resources, :map, required: true
+  attr :current_space, :map, required: true
+
+  def charger_panel(assigns) do
+    alias Botgrade.Campaign.CampaignServer
+
+    variant = CampaignServer.charger_variant(assigns.current_space)
+
+    batteries =
+      assigns.player_cards
+      |> Enum.filter(fn card -> card.type == :battery and card.damage != :destroyed end)
+
+    depleted_batteries =
+      batteries
+      |> Enum.filter(fn card ->
+        remaining = Map.get(card.properties, :remaining_activations, 0)
+        max_acts = Map.get(card.properties, :max_activations, 5)
+        remaining < max_acts
+      end)
+
+    # For turbo: pick up to 2 most depleted batteries
+    turbo_targets =
+      depleted_batteries
+      |> Enum.sort_by(fn card -> Map.get(card.properties, :remaining_activations, 0) end)
+      |> Enum.take(2)
+
+    turbo_ids = Enum.map_join(turbo_targets, ",", & &1.id)
+
+    assigns =
+      assigns
+      |> assign(:variant, variant)
+      |> assign(:batteries, batteries)
+      |> assign(:depleted_batteries, depleted_batteries)
+      |> assign(:turbo_targets, turbo_targets)
+      |> assign(:turbo_ids, turbo_ids)
+      |> assign(:cleared, assigns.current_space.cleared)
+
+    ~H"""
+    <div class="card bg-base-100 shadow-lg border-2 border-info/30">
+      <div class="card-body">
+        <div class="flex items-center justify-between">
+          <h2 class="card-title text-info">
+            <span class="text-2xl">&#9889;</span>
+            {@current_space.label}
+          </h2>
+          <button phx-click="leave_space" phx-value-clear="false" class="btn btn-sm btn-outline btn-success gap-1">
+            <.icon name="hero-arrow-left" class="size-4" /> Leave
+          </button>
+        </div>
+
+        <%= case @variant do %>
+          <% :fast -> %>
+            <p class="text-sm text-base-content/60">
+              Fully recharge one battery. Cost: 1 Wire + 1 Chips.
+            </p>
+
+            <div :if={@cleared} class="text-center text-base-content/50 py-4">
+              Charger already used.
+            </div>
+
+            <div :if={!@cleared and @depleted_batteries == []} class="text-center text-base-content/50 py-4">
+              All batteries are fully charged.
+            </div>
+
+            <div :if={!@cleared and @depleted_batteries != []} class="space-y-2 mt-2">
+              <% can_afford = Map.get(@player_resources, :wire, 0) >= 1 and Map.get(@player_resources, :chips, 0) >= 1 %>
+              <div
+                :for={card <- @depleted_batteries}
+                class="flex items-center justify-between rounded-lg border border-info/20 p-3"
+              >
+                <div>
+                  <span class={["font-bold", card_type_color(card.type)]}>{card.name}</span>
+                  <div class="text-xs text-base-content/50 mt-0.5">
+                    Charges: {Map.get(card.properties, :remaining_activations, 0)}/{Map.get(card.properties, :max_activations, 5)}
+                  </div>
+                </div>
+                <button
+                  phx-click="charger_fast"
+                  phx-value-card-id={card.id}
+                  class="btn btn-xs btn-info"
+                  disabled={!can_afford}
+                >
+                  Full Recharge
+                </button>
+              </div>
+              <div :if={!can_afford} class="text-xs text-error">
+                Need 1 Wire + 1 Chips
+              </div>
+            </div>
+
+          <% :turbo -> %>
+            <p class="text-sm text-base-content/60">
+              Add 2 charges to your 2 most depleted batteries. Cost: 1 Wire.
+            </p>
+
+            <div :if={@cleared} class="text-center text-base-content/50 py-4">
+              Charger already used.
+            </div>
+
+            <div :if={!@cleared and @depleted_batteries == []} class="text-center text-base-content/50 py-4">
+              All batteries are fully charged.
+            </div>
+
+            <div :if={!@cleared and @depleted_batteries != []}>
+              <% can_afford = Map.get(@player_resources, :wire, 0) >= 1 %>
+
+              <div class="space-y-2 mt-2">
+                <div
+                  :for={card <- @turbo_targets}
+                  class="flex items-center justify-between rounded-lg border border-info/20 p-3"
+                >
+                  <div>
+                    <span class={["font-bold", card_type_color(card.type)]}>{card.name}</span>
+                    <div class="text-xs text-base-content/50 mt-0.5">
+                      <% remaining = Map.get(card.properties, :remaining_activations, 0) %>
+                      <% max_acts = Map.get(card.properties, :max_activations, 5) %>
+                      Charges: {remaining}/{max_acts} -> {min(remaining + 2, max_acts)}/{max_acts}
+                    </div>
+                  </div>
+                  <span class="badge badge-info badge-sm">+2</span>
+                </div>
+              </div>
+
+              <div class="card-actions justify-center mt-4">
+                <button
+                  phx-click="charger_turbo"
+                  phx-value-card-ids={@turbo_ids}
+                  class="btn btn-sm btn-info"
+                  disabled={!can_afford}
+                >
+                  Turbo Charge ({length(@turbo_targets)} {if length(@turbo_targets) == 1, do: "battery", else: "batteries"})
+                </button>
+              </div>
+              <div :if={!can_afford} class="text-xs text-error text-center mt-1">
+                Need 1 Wire
+              </div>
+            </div>
+
+          <% :trickle -> %>
+            <p class="text-sm text-base-content/60">
+              Free! End your turn here to trickle-charge one battery (+1 charge).
+            </p>
+
+            <div :if={@depleted_batteries == []} class="text-center text-base-content/50 py-4">
+              All batteries are fully charged.
+            </div>
+
+            <div :if={@depleted_batteries != []} class="space-y-2 mt-2">
+              <div
+                :for={card <- @depleted_batteries}
+                class="flex items-center justify-between rounded-lg border border-info/20 p-3"
+              >
+                <div>
+                  <span class={["font-bold", card_type_color(card.type)]}>{card.name}</span>
+                  <div class="text-xs text-base-content/50 mt-0.5">
+                    Charges: {Map.get(card.properties, :remaining_activations, 0)}/{Map.get(card.properties, :max_activations, 5)}
+                  </div>
+                </div>
+                <button
+                  phx-click="charger_trickle"
+                  phx-value-card-id={card.id}
+                  class="btn btn-xs btn-info btn-outline"
+                >
+                  +1 Charge
+                </button>
+              </div>
+              <p class="text-xs text-base-content/40 text-center mt-1">
+                You can charge once each time you end your turn here.
+              </p>
+            </div>
+        <% end %>
       </div>
     </div>
     """
@@ -889,6 +1071,8 @@ defmodule BotgradeWeb.CampaignComponents do
   defp space_fill(:junker, _), do: "#dc2626"
   defp space_fill(:smithy, true), do: "#6b7280"
   defp space_fill(:smithy, _), do: "#f59e0b"
+  defp space_fill(:charger, true), do: "#6b7280"
+  defp space_fill(:charger, _), do: "#06b6d4"
   defp space_fill(:edge_connector, _), do: "#4b5563"
   defp space_fill(:empty, _), do: "#374151"
   defp space_fill(_, _), do: "#374151"
@@ -903,6 +1087,7 @@ defmodule BotgradeWeb.CampaignComponents do
   defp space_stroke(:scavenge, _), do: "#ca8a04"
   defp space_stroke(:junker, _), do: "#f87171"
   defp space_stroke(:smithy, _), do: "#fbbf24"
+  defp space_stroke(:charger, _), do: "#22d3ee"
   defp space_stroke(:edge_connector, _), do: "#6b7280"
   defp space_stroke(:empty, _), do: "#6b7280"
   defp space_stroke(_, _), do: "#6b7280"
@@ -916,6 +1101,7 @@ defmodule BotgradeWeb.CampaignComponents do
   defp space_icon(:scavenge), do: "\u{2699}"
   defp space_icon(:junker), do: "\u{1F5D1}"
   defp space_icon(:smithy), do: "\u{2692}"
+  defp space_icon(:charger), do: "\u{26A1}"
   defp space_icon(:edge_connector), do: "\u{2192}"
   defp space_icon(:empty), do: "\u{00B7}"
   defp space_icon(_), do: "\u{00B7}"
@@ -927,6 +1113,7 @@ defmodule BotgradeWeb.CampaignComponents do
   defp space_icon_class(:scavenge), do: "text-amber-600"
   defp space_icon_class(:junker), do: "text-red-500"
   defp space_icon_class(:smithy), do: "text-amber-400"
+  defp space_icon_class(:charger), do: "text-cyan-400"
   defp space_icon_class(_), do: "text-base-content"
 
   defp space_type_badge(:enemy), do: "badge-error"
@@ -937,6 +1124,7 @@ defmodule BotgradeWeb.CampaignComponents do
   defp space_type_badge(:scavenge), do: "badge-warning"
   defp space_type_badge(:junker), do: "badge-error"
   defp space_type_badge(:smithy), do: "badge-warning"
+  defp space_type_badge(:charger), do: "badge-info"
   defp space_type_badge(_), do: "badge-ghost"
 
   defp space_type_label(:start), do: "Start"
@@ -948,6 +1136,7 @@ defmodule BotgradeWeb.CampaignComponents do
   defp space_type_label(:scavenge), do: "Scavenge"
   defp space_type_label(:junker), do: "Junker"
   defp space_type_label(:smithy), do: "Smithy"
+  defp space_type_label(:charger), do: "Charger"
   defp space_type_label(:edge_connector), do: "Zone Border"
   defp space_type_label(:empty), do: "Passage"
   defp space_type_label(_), do: "Unknown"

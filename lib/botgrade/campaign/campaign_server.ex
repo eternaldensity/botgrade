@@ -45,6 +45,15 @@ defmodule Botgrade.Campaign.CampaignServer do
   def smithy_upgrade_card(campaign_id, card_id),
     do: GenServer.call(via(campaign_id), {:smithy_upgrade_card, card_id})
 
+  def charger_fast(campaign_id, card_id),
+    do: GenServer.call(via(campaign_id), {:charger_fast, card_id})
+
+  def charger_turbo(campaign_id, card_ids),
+    do: GenServer.call(via(campaign_id), {:charger_turbo, card_ids})
+
+  def charger_trickle(campaign_id, card_id),
+    do: GenServer.call(via(campaign_id), {:charger_trickle, card_id})
+
   # --- Callbacks ---
 
   @impl true
@@ -305,6 +314,90 @@ defmodule Botgrade.Campaign.CampaignServer do
   end
 
   @impl true
+  def handle_call({:charger_fast, card_id}, _from, state) do
+    cost = %{wire: 1, chips: 1}
+
+    if has_resources?(state.player_resources, cost) do
+      case recharge_battery(state.player_cards, card_id, :full) do
+        {:ok, updated_cards, recharged} ->
+          updated_spaces = Map.update!(state.spaces, state.current_space_id, &%{&1 | cleared: true})
+          updated_tiles = sync_tiles_from_spaces(state.tiles, updated_spaces)
+
+          new_state = %{state |
+            player_cards: updated_cards,
+            player_resources: deduct_resources(state.player_resources, cost),
+            spaces: updated_spaces,
+            tiles: updated_tiles
+          }
+
+          auto_save(new_state)
+          broadcast(new_state)
+          {:reply, {:ok, recharged, new_state}, new_state, @idle_timeout}
+
+        {:error, reason} ->
+          {:reply, {:error, reason}, state, @idle_timeout}
+      end
+    else
+      {:reply, {:error, "Not enough resources"}, state, @idle_timeout}
+    end
+  end
+
+  @impl true
+  def handle_call({:charger_turbo, card_ids}, _from, state) when is_list(card_ids) do
+    cost = %{wire: 1}
+
+    if length(card_ids) < 1 or length(card_ids) > 2 do
+      {:reply, {:error, "Select 1 or 2 batteries"}, state, @idle_timeout}
+    else
+      if has_resources?(state.player_resources, cost) do
+        result =
+          Enum.reduce_while(card_ids, {:ok, state.player_cards, 0}, fn cid, {:ok, cards, total} ->
+            case recharge_battery(cards, cid, {:add, 2}) do
+              {:ok, updated, recharged} -> {:cont, {:ok, updated, total + recharged}}
+              {:error, reason} -> {:halt, {:error, reason}}
+            end
+          end)
+
+        case result do
+          {:ok, updated_cards, total_recharged} ->
+            updated_spaces = Map.update!(state.spaces, state.current_space_id, &%{&1 | cleared: true})
+            updated_tiles = sync_tiles_from_spaces(state.tiles, updated_spaces)
+
+            new_state = %{state |
+              player_cards: updated_cards,
+              player_resources: deduct_resources(state.player_resources, cost),
+              spaces: updated_spaces,
+              tiles: updated_tiles
+            }
+
+            auto_save(new_state)
+            broadcast(new_state)
+            {:reply, {:ok, total_recharged, new_state}, new_state, @idle_timeout}
+
+          {:error, reason} ->
+            {:reply, {:error, reason}, state, @idle_timeout}
+        end
+      else
+        {:reply, {:error, "Not enough resources"}, state, @idle_timeout}
+      end
+    end
+  end
+
+  @impl true
+  def handle_call({:charger_trickle, card_id}, _from, state) do
+    case recharge_battery(state.player_cards, card_id, {:add, 1}) do
+      {:ok, updated_cards, recharged} ->
+        new_state = %{state | player_cards: updated_cards}
+        auto_save(new_state)
+        broadcast(new_state)
+        {:reply, {:ok, recharged, new_state}, new_state, @idle_timeout}
+
+      {:error, reason} ->
+        {:reply, {:error, reason}, state, @idle_timeout}
+    end
+  end
+
+  @impl true
   def handle_call(:clear_current_space, _from, state) do
     updated_spaces = Map.update!(state.spaces, state.current_space_id, &%{&1 | cleared: true})
     updated_tiles = sync_tiles_from_spaces(state.tiles, updated_spaces)
@@ -321,6 +414,12 @@ defmodule Botgrade.Campaign.CampaignServer do
   end
 
   # --- Public Helpers (for LiveView) ---
+
+  @doc "Determines charger variant from space label."
+  def charger_variant(%{label: "Fast Charger"}), do: :fast
+  def charger_variant(%{label: "Turbo Charger"}), do: :turbo
+  def charger_variant(%{label: "Trickle Charger"}), do: :trickle
+  def charger_variant(_), do: :fast
 
   def shop_cards_for_node(state) do
     pool = StarterDecks.expanded_card_pool()
@@ -435,6 +534,29 @@ defmodule Botgrade.Campaign.CampaignServer do
       {:ok, List.replace_at(cards, idx, repaired)}
     else
       :not_found
+    end
+  end
+
+  defp recharge_battery(cards, card_id, mode) do
+    idx = Enum.find_index(cards, &(&1.id == card_id && &1.type == :battery))
+
+    if idx do
+      card = Enum.at(cards, idx)
+      max_acts = Map.get(card.properties, :max_activations, 5)
+      remaining = Map.get(card.properties, :remaining_activations, 0)
+
+      new_remaining =
+        case mode do
+          :full -> max_acts
+          {:add, n} -> min(remaining + n, max_acts)
+        end
+
+      recharged = new_remaining - remaining
+
+      updated = %{card | properties: Map.put(card.properties, :remaining_activations, new_remaining)}
+      {:ok, List.replace_at(cards, idx, updated), recharged}
+    else
+      {:error, "Battery not found"}
     end
   end
 

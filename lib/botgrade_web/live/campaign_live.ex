@@ -85,6 +85,9 @@ defmodule BotgradeWeb.CampaignLive do
           :smithy when not space.cleared ->
             {:noreply, assign(socket, view_mode: :smithy)}
 
+          :charger ->
+            {:noreply, assign(socket, view_mode: :charger)}
+
           _ ->
             {:noreply, socket}
         end
@@ -125,6 +128,46 @@ defmodule BotgradeWeb.CampaignLive do
   @impl true
   def handle_event("enter_smithy", _params, socket) do
     {:noreply, assign(socket, view_mode: :smithy)}
+  end
+
+  @impl true
+  def handle_event("enter_charger", _params, socket) do
+    {:noreply, assign(socket, view_mode: :charger)}
+  end
+
+  @impl true
+  def handle_event("charger_fast", %{"card-id" => card_id}, socket) do
+    case CampaignServer.charger_fast(socket.assigns.campaign_id, card_id) do
+      {:ok, recharged, _state} ->
+        {:noreply, assign(socket, view_mode: :tile, info_message: "Battery fully recharged! (+#{recharged} charges)")}
+
+      {:error, reason} ->
+        {:noreply, assign(socket, error_message: reason)}
+    end
+  end
+
+  @impl true
+  def handle_event("charger_turbo", %{"card-ids" => ids_str}, socket) do
+    card_ids = String.split(ids_str, ",", trim: true)
+
+    case CampaignServer.charger_turbo(socket.assigns.campaign_id, card_ids) do
+      {:ok, recharged, _state} ->
+        {:noreply, assign(socket, view_mode: :tile, info_message: "Turbo charged! (+#{recharged} charges total)")}
+
+      {:error, reason} ->
+        {:noreply, assign(socket, error_message: reason)}
+    end
+  end
+
+  @impl true
+  def handle_event("charger_trickle", %{"card-id" => card_id}, socket) do
+    case CampaignServer.charger_trickle(socket.assigns.campaign_id, card_id) do
+      {:ok, recharged, _state} ->
+        {:noreply, assign(socket, info_message: "Trickle charge! (+#{recharged} charge)")}
+
+      {:error, reason} ->
+        {:noreply, assign(socket, error_message: reason)}
+    end
   end
 
   @impl true
@@ -339,6 +382,17 @@ defmodule BotgradeWeb.CampaignLive do
             <.smithy_panel
               player_cards={@state.player_cards}
               player_resources={@state.player_resources}
+            />
+            <.campaign_player_status
+              player_cards={@state.player_cards}
+              player_resources={@state.player_resources}
+            />
+
+          <% :charger -> %>
+            <.charger_panel
+              player_cards={@state.player_cards}
+              player_resources={@state.player_resources}
+              current_space={@current_space}
             />
             <.campaign_player_status
               player_cards={@state.player_cards}
