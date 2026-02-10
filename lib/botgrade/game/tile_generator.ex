@@ -10,7 +10,7 @@ defmodule Botgrade.Game.TileGenerator do
   @cell_width 400.0
   @cell_height 350.0
 
-  @space_type_weights [enemy: 50, shop: 15, rest: 15, event: 20]
+  @space_type_weights [enemy: 50, shop: 15, rest: 15, event: 20, junker: 10]
 
   @enemy_by_danger %{
     1 => [{"rogue", 1.0}],
@@ -28,6 +28,7 @@ defmodule Botgrade.Game.TileGenerator do
     start: ["Entry Point"],
     exit: ["Research Lab"],
     scavenge: ["Salvage Pile", "Scrap Cache", "Supply Stash", "Wreckage"],
+    junker: ["Junker", "Chop Shop", "Scrap Forge", "Disassembly Pit"],
     empty_passage: ["Passage", "Corridor", "Open Street", "Walkway"],
     empty_junction: ["Junction", "Crossroads", "Intersection", "Hub"],
     edge_connector: ["Zone Border"]

@@ -1,7 +1,7 @@
 defmodule Botgrade.Campaign.CampaignServer do
   use GenServer
 
-  alias Botgrade.Game.{CampaignState, MapGenerator, StarterDecks}
+  alias Botgrade.Game.{CampaignState, MapGenerator, ScrapLogic, StarterDecks}
   alias Botgrade.Campaign.CampaignPersistence
   alias Botgrade.Combat.CombatSupervisor
 
@@ -38,6 +38,9 @@ defmodule Botgrade.Campaign.CampaignServer do
 
   def scavenge(campaign_id, resources),
     do: GenServer.call(via(campaign_id), {:scavenge, resources})
+
+  def junker_destroy_card(campaign_id, card_id),
+    do: GenServer.call(via(campaign_id), {:junker_destroy_card, card_id})
 
   # --- Callbacks ---
 
@@ -226,6 +229,39 @@ defmodule Botgrade.Campaign.CampaignServer do
     auto_save(new_state)
     broadcast(new_state)
     {:reply, {:ok, new_state}, new_state, @idle_timeout}
+  end
+
+  @impl true
+  def handle_call({:junker_destroy_card, card_id}, _from, state) do
+    idx = Enum.find_index(state.player_cards, &(&1.id == card_id))
+
+    if idx do
+      card = Enum.at(state.player_cards, idx)
+      # Mark as destroyed with no overkill for full scrap yield
+      destroyed = %{card | damage: :destroyed, current_hp: 0}
+      scrap = ScrapLogic.generate_scrap(destroyed)
+
+      new_resources =
+        Enum.reduce(scrap, state.player_resources, fn {k, v}, acc ->
+          Map.update(acc, k, v, &(&1 + v))
+        end)
+
+      updated_spaces = Map.update!(state.spaces, state.current_space_id, &%{&1 | cleared: true})
+      updated_tiles = sync_tiles_from_spaces(state.tiles, updated_spaces)
+
+      new_state = %{state |
+        player_cards: List.delete_at(state.player_cards, idx),
+        player_resources: new_resources,
+        spaces: updated_spaces,
+        tiles: updated_tiles
+      }
+
+      auto_save(new_state)
+      broadcast(new_state)
+      {:reply, {:ok, scrap, new_state}, new_state, @idle_timeout}
+    else
+      {:reply, {:error, "Card not found"}, state, @idle_timeout}
+    end
   end
 
   @impl true

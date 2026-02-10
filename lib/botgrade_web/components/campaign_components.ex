@@ -504,6 +504,9 @@ defmodule BotgradeWeb.CampaignComponents do
         <button :if={@space.type == :shop} phx-click="enter_shop" class="btn btn-sm btn-warning mt-2">
           <span>&#128722;</span> Enter Shop
         </button>
+        <button :if={@space.type == :junker && !@space.cleared} phx-click="enter_junker" class="btn btn-sm btn-error mt-2">
+          <span>&#128465;</span> Enter Junker
+        </button>
       </div>
     </div>
     """
@@ -687,6 +690,67 @@ defmodule BotgradeWeb.CampaignComponents do
     """
   end
 
+  # --- Junker Panel ---
+
+  attr :player_cards, :list, required: true
+
+  def junker_panel(assigns) do
+    # Show all cards that can be junked (exclude nothing - player chooses any card to destroy)
+    junkable_cards =
+      assigns.player_cards
+      |> Enum.with_index()
+      |> Enum.filter(fn {card, _idx} -> card.damage != :destroyed end)
+
+    assigns = assign(assigns, :junkable_cards, junkable_cards)
+
+    ~H"""
+    <div class="card bg-base-100 shadow-lg border-2 border-error/30">
+      <div class="card-body">
+        <div class="flex items-center justify-between">
+          <h2 class="card-title text-error">
+            <span class="text-2xl">&#128465;</span>
+            Junker
+          </h2>
+          <button phx-click="leave_space" phx-value-clear="false" class="btn btn-sm btn-outline btn-success gap-1">
+            <.icon name="hero-arrow-left" class="size-4" /> Leave
+          </button>
+        </div>
+        <p class="text-sm text-base-content/60">
+          Choose a card to destroy. You'll receive scrap materials based on the card type.
+        </p>
+
+        <div :if={@junkable_cards == []} class="text-center text-base-content/50 py-4">
+          No cards to junk.
+        </div>
+
+        <div :if={@junkable_cards != []} class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
+          <div
+            :for={{card, _idx} <- @junkable_cards}
+            class="flex items-center justify-between rounded-lg border border-error/20 p-3"
+          >
+            <div>
+              <span class={["font-bold", card_type_color(card.type)]}>{card.name}</span>
+              <span class="badge badge-xs badge-ghost ml-1">{card_type_short(card.type)}</span>
+              <span :if={card.damage == :damaged} class="badge badge-xs badge-warning ml-1">DAMAGED</span>
+              <div class="text-xs text-base-content/50 mt-0.5">
+                {card_summary(card)}
+              </div>
+            </div>
+            <button
+              phx-click="junker_destroy"
+              phx-value-card-id={card.id}
+              class="btn btn-xs btn-error btn-outline"
+              data-confirm={"Destroy #{card.name}? This cannot be undone."}
+            >
+              Junk
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    """
+  end
+
   # --- Helper Functions ---
 
   defp tile_viewbox(nil), do: "0 0 1000 600"
@@ -736,6 +800,8 @@ defmodule BotgradeWeb.CampaignComponents do
   defp space_fill(:event, _), do: "#3b82f6"
   defp space_fill(:scavenge, true), do: "#6b7280"
   defp space_fill(:scavenge, _), do: "#a16207"
+  defp space_fill(:junker, true), do: "#6b7280"
+  defp space_fill(:junker, _), do: "#dc2626"
   defp space_fill(:edge_connector, _), do: "#4b5563"
   defp space_fill(:empty, _), do: "#374151"
   defp space_fill(_, _), do: "#374151"
@@ -748,6 +814,7 @@ defmodule BotgradeWeb.CampaignComponents do
   defp space_stroke(:rest, _), do: "#4ade80"
   defp space_stroke(:event, _), do: "#60a5fa"
   defp space_stroke(:scavenge, _), do: "#ca8a04"
+  defp space_stroke(:junker, _), do: "#f87171"
   defp space_stroke(:edge_connector, _), do: "#6b7280"
   defp space_stroke(:empty, _), do: "#6b7280"
   defp space_stroke(_, _), do: "#6b7280"
@@ -759,6 +826,7 @@ defmodule BotgradeWeb.CampaignComponents do
   defp space_icon(:rest), do: "\u{1F527}"
   defp space_icon(:event), do: "?"
   defp space_icon(:scavenge), do: "\u{2699}"
+  defp space_icon(:junker), do: "\u{1F5D1}"
   defp space_icon(:edge_connector), do: "\u{2192}"
   defp space_icon(:empty), do: "\u{00B7}"
   defp space_icon(_), do: "\u{00B7}"
@@ -768,6 +836,7 @@ defmodule BotgradeWeb.CampaignComponents do
   defp space_icon_class(:rest), do: "text-success"
   defp space_icon_class(:event), do: "text-info"
   defp space_icon_class(:scavenge), do: "text-amber-600"
+  defp space_icon_class(:junker), do: "text-red-500"
   defp space_icon_class(_), do: "text-base-content"
 
   defp space_type_badge(:enemy), do: "badge-error"
@@ -776,6 +845,7 @@ defmodule BotgradeWeb.CampaignComponents do
   defp space_type_badge(:event), do: "badge-info"
   defp space_type_badge(:exit), do: "badge-secondary"
   defp space_type_badge(:scavenge), do: "badge-warning"
+  defp space_type_badge(:junker), do: "badge-error"
   defp space_type_badge(_), do: "badge-ghost"
 
   defp space_type_label(:start), do: "Start"
@@ -785,6 +855,7 @@ defmodule BotgradeWeb.CampaignComponents do
   defp space_type_label(:rest), do: "Rest"
   defp space_type_label(:event), do: "Event"
   defp space_type_label(:scavenge), do: "Scavenge"
+  defp space_type_label(:junker), do: "Junker"
   defp space_type_label(:edge_connector), do: "Zone Border"
   defp space_type_label(:empty), do: "Passage"
   defp space_type_label(_), do: "Unknown"
