@@ -63,7 +63,7 @@ defmodule Botgrade.Game.ZoneGenerator do
   end
 
   # BFS to ensure start and exit are connected. If not, add bridge cells.
-  # Then prune any cells not reachable from start to eliminate islands.
+  # Then connect any island clusters to the main body via straight-line corridors.
   defp ensure_connectivity(cells, start, target, cols, rows) do
     connected_cells =
       if connected?(cells, start, target) do
@@ -74,10 +74,82 @@ defmodule Botgrade.Game.ZoneGenerator do
         MapSet.union(cells, MapSet.new(bridge))
       end
 
-    # Flood-fill from start and keep only reachable cells
-    reachable = flood_fill(connected_cells, start)
-    MapSet.intersection(connected_cells, reachable)
+    # Connect islands to the main body instead of removing them
+    connect_islands(connected_cells, start)
   end
+
+  # Find disconnected island clusters and bridge each to the main body
+  # via a straight line of cells, creating interesting side-streets.
+  defp connect_islands(cells, start) do
+    main_body = flood_fill(cells, start)
+    island_cells = MapSet.difference(cells, main_body)
+
+    if MapSet.size(island_cells) == 0 do
+      cells
+    else
+      # Group island cells into connected components
+      islands = find_components(island_cells)
+
+      # Bridge each island to the main body
+      Enum.reduce(islands, cells, fn island, acc ->
+        acc = bridge_island_to_main(island, acc, start)
+        acc
+      end)
+    end
+  end
+
+  # Find connected components among a set of cells using flood-fill.
+  defp find_components(cells) do
+    do_find_components(cells, [])
+  end
+
+  defp do_find_components(remaining, components) do
+    if MapSet.size(remaining) == 0 do
+      components
+    else
+      seed = Enum.min(remaining)
+      component = flood_fill(remaining, seed)
+      rest = MapSet.difference(remaining, component)
+      do_find_components(rest, [component | components])
+    end
+  end
+
+  # Bridge an island to the main body by drawing a straight line from the
+  # island cell closest to the main body. Tries horizontal first, then vertical.
+  defp bridge_island_to_main(island, cells, start) do
+    main_body = flood_fill(cells, start)
+
+    # Find the island cell + main cell pair with shortest Manhattan distance
+    {island_cell, main_cell} =
+      for ic <- MapSet.to_list(island),
+          mc <- MapSet.to_list(main_body),
+          reduce: {nil, nil, :infinity} do
+        {best_ic, best_mc, best_dist} ->
+          dist = manhattan(ic, mc)
+
+          if dist < best_dist do
+            {ic, mc, dist}
+          else
+            {best_ic, best_mc, best_dist}
+          end
+      end
+      |> then(fn {ic, mc, _dist} -> {ic, mc} end)
+
+    # Draw a straight line: move horizontally first, then vertically
+    {ic, ir} = island_cell
+    {mc, mr} = main_cell
+
+    h_range = if ic <= mc, do: ic..mc, else: mc..ic
+    v_range = if ir <= mr, do: ir..mr, else: mr..ir
+
+    bridge_cells =
+      (for col <- h_range, do: {col, ir}) ++
+        (for row <- v_range, do: {mc, row})
+
+    MapSet.union(cells, MapSet.new(bridge_cells))
+  end
+
+  defp manhattan({c1, r1}, {c2, r2}), do: abs(c1 - c2) + abs(r1 - r2)
 
   defp connected?(cells, start, target) do
     reachable = flood_fill(cells, start)
