@@ -1,6 +1,6 @@
 defmodule Botgrade.Game.TileGenerator do
   @moduledoc """
-  Generates a tile with 5-8 internal spaces for a zone.
+  Generates a tile with 5-10 internal spaces for a zone.
   Each tile has a branching path connecting its passable sides
   (determined by which neighboring zones exist).
   """
@@ -192,7 +192,7 @@ defmodule Botgrade.Game.TileGenerator do
 
     # Calculate how many extra spaces we need to reach 5-8 total
     current_count = length(edge_spaces) + 1 + length(intermediates)
-    target = Enum.random(5..8)
+    target = Enum.random(5..10)
     extra_needed = max(0, target - current_count)
 
     # Add extra spaces branching off existing intermediates or center
