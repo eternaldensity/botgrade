@@ -46,6 +46,10 @@ defmodule Botgrade.Game.UpgradeLogic do
   @spec apply_upgrade(Card.t()) :: Card.t()
   def apply_upgrade(%Card{type: :weapon} = card) do
     cond do
+      # Weapons with random_element upgrade to +1 activation per turn
+      Map.get(card.properties, :random_element, false) ->
+        update_prop(card, :max_activations_per_turn, &(&1 + 1))
+
       # First priority: relax a restrictive slot condition
       slot_to_relax(card) ->
         relax_slot_condition(card)
@@ -96,10 +100,20 @@ defmodule Botgrade.Game.UpgradeLogic do
   end
 
   def apply_upgrade(%Card{type: :utility} = card) do
-    if slot_to_relax(card) do
-      relax_slot_condition(card)
-    else
-      update_prop(card, :card_hp, &(&1 + 1))
+    ability = Map.get(card.properties, :utility_ability)
+
+    cond do
+      ability == :quantum_tumbler ->
+        update_prop(card, :max_activations_per_turn, &(&1 + 1))
+
+      ability == :internal_servo ->
+        relax_slot_condition(card)
+
+      slot_to_relax(card) ->
+        relax_slot_condition(card)
+
+      true ->
+        update_prop(card, :card_hp, &(&1 + 1))
     end
   end
 
@@ -108,11 +122,17 @@ defmodule Botgrade.Game.UpgradeLogic do
   # --- Descriptions ---
 
   defp upgrade_description(%Card{type: :weapon} = card) do
-    if slot_to_relax(card) do
-      "Relax die restriction (easier to activate)"
-    else
-      base = Map.get(card.properties, :damage_base, 0)
-      "+1 base damage (#{base} -> #{base + 1})"
+    cond do
+      Map.get(card.properties, :random_element, false) ->
+        acts = Map.get(card.properties, :max_activations_per_turn, 1)
+        "+1 activation per turn (#{acts} -> #{acts + 1})"
+
+      slot_to_relax(card) ->
+        "Relax die restriction (easier to activate)"
+
+      true ->
+        base = Map.get(card.properties, :damage_base, 0)
+        "+1 base damage (#{base} -> #{base + 1})"
     end
   end
 
@@ -156,11 +176,22 @@ defmodule Botgrade.Game.UpgradeLogic do
   end
 
   defp upgrade_description(%Card{type: :utility} = card) do
-    if slot_to_relax(card) do
-      "Relax die restriction (easier to activate)"
-    else
-      hp = Map.get(card.properties, :card_hp, 2)
-      "+1 HP (#{hp} -> #{hp + 1})"
+    ability = Map.get(card.properties, :utility_ability)
+
+    cond do
+      ability == :quantum_tumbler ->
+        acts = Map.get(card.properties, :max_activations_per_turn, 2)
+        "+1 activation per turn (#{acts} -> #{acts + 1})"
+
+      ability == :internal_servo ->
+        "Raise max die value requirement"
+
+      slot_to_relax(card) ->
+        "Relax die restriction (easier to activate)"
+
+      true ->
+        hp = Map.get(card.properties, :card_hp, 2)
+        "+1 HP (#{hp} -> #{hp + 1})"
     end
   end
 

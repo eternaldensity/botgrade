@@ -31,7 +31,13 @@ defmodule Botgrade.Game.ElementLogic do
   """
   @spec apply_element_status(CombatState.t(), Card.t(), :player | :enemy) :: CombatState.t()
   def apply_element_status(state, weapon, who) do
-    element = Map.get(weapon.properties, :element)
+    element =
+      if Map.get(weapon.properties, :random_element, false) do
+        Enum.random([:fire, :ice, :magnetic, :dark, :water])
+      else
+        Map.get(weapon.properties, :element)
+      end
+
     stacks = Map.get(weapon.properties, :element_stacks, 1)
 
     if element do

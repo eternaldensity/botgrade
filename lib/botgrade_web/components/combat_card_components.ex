@@ -257,6 +257,9 @@ defmodule BotgradeWeb.CombatCardComponents do
           <div :if={Map.has_key?(@card.properties, :element)} class={["text-[10px] font-semibold", element_color(@card.properties.element)]}>
             {element_label(@card.properties.element)} element
           </div>
+          <div :if={Map.get(@card.properties, :random_element, false)} class="text-[10px] font-semibold text-accent">
+            Random element
+          </div>
         </div>
       <% :armor -> %>
         <div class="space-y-0.5">
@@ -577,6 +580,8 @@ defmodule BotgradeWeb.CombatCardComponents do
   defp result_label(%{type: :shield, value: v}), do: "+#{v} shield"
   defp result_label(%{type: :utility, ability: :beam_split}), do: "split"
   defp result_label(%{type: :utility, ability: :overcharge}), do: "+1 dmg"
+  defp result_label(%{type: :utility, ability: :quantum_tumbler}), do: "rerolled"
+  defp result_label(%{type: :utility, ability: :internal_servo}), do: "drew"
   defp result_label(%{type: :utility}), do: "activated"
 
   defp damage_type_color(:kinetic), do: "text-amber-500"
@@ -684,10 +689,14 @@ defmodule BotgradeWeb.CombatCardComponents do
 
   defp utility_ability_label(:beam_split), do: "Beam Split"
   defp utility_ability_label(:overcharge), do: "Overcharge"
+  defp utility_ability_label(:quantum_tumbler), do: "Reroll"
+  defp utility_ability_label(:internal_servo), do: "Draw"
   defp utility_ability_label(_), do: "Utility"
 
   defp utility_ability_description(:beam_split), do: "Split a die into two halves"
   defp utility_ability_description(:overcharge), do: "Weapons deal +1 damage this turn"
+  defp utility_ability_description(:quantum_tumbler), do: "Reroll the die"
+  defp utility_ability_description(:internal_servo), do: "Draw die value + 1 cards"
   defp utility_ability_description(_), do: ""
 
   defp damage_penalty_description(%{type: :battery} = card) do

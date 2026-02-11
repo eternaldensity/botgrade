@@ -30,6 +30,7 @@ defmodule Botgrade.Game.StarterDecks do
         card_hp: 3,
         condition: {:min, 3}
       ),
+      utility("utl_tumbler", "Quantum Tumbler", card_hp: 2, utility_ability: :quantum_tumbler, max_activations_per_turn: 2),
       locomotion("loc_1", "Treads", speed_base: 1, card_hp: 2),
       chassis("chs_1", "Core Frame", card_hp: 5),
       chassis("chs_2", "Armor Plate", card_hp: 4),
@@ -503,6 +504,16 @@ defmodule Botgrade.Game.StarterDecks do
         self_damage: 1,
         targeting: %{chassis: 30, weapon: 20, armor: 15, battery: 15, cpu: 10, capacitor: 5, locomotion: 5}
       ),
+      utility("utl_servo", "Internal Servo", card_hp: 2, utility_ability: :internal_servo, condition: {:max, 2}),
+      weapon("wpn_rainbeam", "Rainbeam",
+        damage_base: 2,
+        damage_type: :energy,
+        slots: 1,
+        card_hp: 2,
+        max_activations_per_turn: 2,
+        random_element: true,
+        targeting: %{weapon: 15, armor: 15, battery: 15, capacitor: 10, chassis: 15, locomotion: 15, cpu: 15}
+      ),
       chassis("chs_ablative", "Ablative Ceramic", card_hp: 3, chassis_ability: :ablative_ceramic),
       weapon("wpn_corrosion_sprayer", "Corrosion Sprayer",
         damage_base: 0,
@@ -604,6 +615,7 @@ defmodule Botgrade.Game.StarterDecks do
       |> maybe_put(:end_of_turn_effect, Keyword.get(opts, :end_of_turn_effect))
       |> maybe_put(:element, Keyword.get(opts, :element))
       |> maybe_put(:element_stacks, Keyword.get(opts, :element_stacks))
+      |> maybe_put(:random_element, Keyword.get(opts, :random_element))
 
     %Card{
       id: id,

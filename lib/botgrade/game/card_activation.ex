@@ -149,6 +149,21 @@ defmodule Botgrade.Game.CardActivation do
 
           {state, combatant,
            "#{who_name} activates #{utility_card.name}: Spent [#{die.value}] for +1 weapon damage this turn!"}
+
+        :quantum_tumbler ->
+          new_value = :rand.uniform(die.sides)
+          rerolled_die = %{sides: die.sides, value: new_value}
+          combatant = %{combatant | available_dice: combatant.available_dice ++ [rerolled_die]}
+
+          {state, combatant,
+           "#{who_name} activates #{utility_card.name}: Rerolled [#{die.value}] → [#{new_value}]."}
+
+        :internal_servo ->
+          draw_count = die.value + 1
+          {drawn, combatant} = draw_cards_for_servo(combatant, draw_count)
+
+          {state, combatant,
+           "#{who_name} activates #{utility_card.name}: Spent [#{die.value}] to draw #{length(drawn)} cards."}
       end
 
     result_card =
@@ -395,6 +410,19 @@ defmodule Botgrade.Game.CardActivation do
 
   defp set_combatant(state, :player, combatant), do: %{state | player: combatant}
   defp set_combatant(state, :enemy, combatant), do: %{state | enemy: combatant}
+
+  defp draw_cards_for_servo(robot, count) do
+    {deck, discard} =
+      if length(robot.deck) < count and length(robot.discard) > 0 do
+        {Botgrade.Game.Deck.shuffle_discard_into_deck(robot.deck, robot.discard), []}
+      else
+        {robot.deck, robot.discard}
+      end
+
+    {drawn, remaining} = Botgrade.Game.Deck.draw(deck, count)
+    robot = %{robot | deck: remaining, discard: discard, hand: robot.hand ++ drawn}
+    {drawn, robot}
+  end
 
   defp add_log(state, message) do
     %{state | log: [message | state.log]}
