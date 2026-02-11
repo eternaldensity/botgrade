@@ -14,15 +14,15 @@ defmodule Botgrade.Game.CombatLogicTest do
       assert state.phase == :draw
       assert state.turn_number == 1
       assert state.result == :ongoing
-      assert Robot.total_hp(state.player) == 12
-      assert Robot.current_hp(state.player) == 12
+      assert Robot.total_hp(state.player) in [9, 12]
+      assert Robot.current_hp(state.player) == Robot.total_hp(state.player)
       assert Robot.total_hp(state.enemy) == 9
       assert Robot.current_hp(state.enemy) == 9
     end
 
-    test "player deck has 10 non-installed cards" do
+    test "player deck has 8 or 9 non-installed cards" do
       state = new_combat()
-      assert length(state.player.deck) == 10
+      assert length(state.player.deck) in [8, 9]
     end
 
     test "enemy deck has 5 non-installed cards" do
@@ -41,7 +41,7 @@ defmodule Botgrade.Game.CombatLogicTest do
     test "draws 5 cards into hand and transitions to power_up" do
       state = new_combat() |> CombatLogic.draw_phase()
       assert length(state.player.hand) == 5
-      assert length(state.player.deck) == 5
+      assert length(state.player.deck) in [3, 4]
       assert state.phase == :power_up
     end
   end

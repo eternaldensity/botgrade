@@ -2,12 +2,11 @@ defmodule Botgrade.Game.StarterDecks do
   alias Botgrade.Game.Card
 
   def player_deck do
-    [
+    base = [
       battery("bat_1", "Small Battery", dice_count: 1, die_sides: 6, max_activations: 5, card_hp: 2),
       battery("bat_2", "Small Battery", dice_count: 1, die_sides: 6, max_activations: 5, card_hp: 2),
       battery("bat_3", "Medium Battery", dice_count: 2, die_sides: 4, max_activations: 4, card_hp: 3),
       capacitor("cap_1", "Basic Capacitor", max_stored: 2, card_hp: 2),
-      dynamo("cap_dynamo", "Dynamo", card_hp: 2),
       weapon("wpn_1", "Arm Blaster",
         damage_base: 0,
         damage_type: :energy,
@@ -30,13 +29,19 @@ defmodule Botgrade.Game.StarterDecks do
         card_hp: 3,
         condition: {:min, 3}
       ),
-      utility("utl_tumbler", "Quantum Tumbler", card_hp: 2, utility_ability: :quantum_tumbler, max_activations_per_turn: 2),
       locomotion("loc_1", "Treads", speed_base: 1, card_hp: 2),
       chassis("chs_1", "Core Frame", card_hp: 5),
       chassis("chs_2", "Armor Plate", card_hp: 4),
-      chassis("chs_3", "Ablative Ceramic", card_hp: 3, chassis_ability: :ablative_ceramic),
       cpu("cpu_1", "Basic CPU", card_hp: 3)
     ]
+
+    bonus = Enum.random([
+      dynamo("cap_dynamo", "Dynamo", card_hp: 2),
+      utility("utl_tumbler", "Quantum Tumbler", card_hp: 2, utility_ability: :quantum_tumbler, max_activations_per_turn: 2),
+      chassis("chs_3", "Ablative Ceramic", card_hp: 3, chassis_ability: :ablative_ceramic)
+    ])
+
+    base ++ [bonus]
   end
 
   def enemy_deck do
