@@ -598,6 +598,7 @@ defmodule BotgradeWeb.CombatCardComponents do
             <span class="text-base-content/50">Card HP:</span>
             <span class="font-mono">{Map.get(@card.properties, :card_hp, 3)}</span>
           </div>
+          <.targeting_profile_display :if={@card.properties[:targeting_profile]} profile={@card.properties.targeting_profile} />
         <% :armor -> %>
           <div class="flex items-center gap-2">
             <span class="text-base-content/50">Type:</span>
@@ -671,6 +672,45 @@ defmodule BotgradeWeb.CombatCardComponents do
       <div :if={@card.damage == :damaged} class="mt-2 text-warning bg-warning/10 rounded px-2 py-1">
         <.icon name="hero-exclamation-triangle-mini" class="size-3 inline" />
         {damage_penalty_description(@card)}
+      </div>
+    </div>
+    """
+  end
+
+  # --- Targeting Profile Display ---
+
+  attr(:profile, :map, required: true)
+
+  defp targeting_profile_display(assigns) do
+    sorted =
+      assigns.profile
+      |> Enum.sort_by(fn {_type, weight} -> weight end, :desc)
+
+    max_weight = case sorted do
+      [{_, w} | _] -> w
+      _ -> 1
+    end
+
+    assigns =
+      assigns
+      |> assign(:sorted, sorted)
+      |> assign(:max_weight, max_weight)
+
+    ~H"""
+    <div class="mt-1 pt-1 border-t border-base-300/50">
+      <span class="text-base-content/50 text-xs">Preferred targets:</span>
+      <div class="mt-1 space-y-0.5">
+        <div :for={{type, weight} <- @sorted} class="flex items-center gap-1.5">
+          <.icon name={card_type_icon(type)} class={["size-3 shrink-0", card_icon_color(type)]} />
+          <span class="text-xs w-16 shrink-0">{card_type_label(type)}</span>
+          <div class="flex-1 bg-base-300 rounded-full h-1.5 overflow-hidden">
+            <div
+              class={["h-full rounded-full", targeting_bar_color(weight, @max_weight)]}
+              style={"width: #{weight}%"}
+            />
+          </div>
+          <span class="text-[10px] font-mono text-base-content/40 w-6 text-right">{weight}%</span>
+        </div>
       </div>
     </div>
     """
@@ -1086,6 +1126,10 @@ defmodule BotgradeWeb.CombatCardComponents do
       _ -> "Assign a die to the slot to activate this utility's special ability."
     end
   end
+
+  defp targeting_bar_color(weight, max) when weight == max, do: "bg-error"
+  defp targeting_bar_color(weight, max) when weight >= max * 0.6, do: "bg-warning"
+  defp targeting_bar_color(_weight, _max), do: "bg-base-content/20"
 
   defp end_of_turn_label(:plasma_lobber), do: "Fires automatically at end of turn (random damage 1-3)"
   defp end_of_turn_label(:lithium_mode), do: "Drains enemy battery charge at end of turn"
