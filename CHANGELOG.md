@@ -17,6 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Add scavenging system for defeated robots (#1)
 
 ### Fixed
+- Fix cards being drawn with stale activated_this_turn state (#59)
 - Fix shop inventory re-randomizing on buy (#37)
 - Battery charges not persisting between quick combat fights (#26)
 - Investigate shield removal timing (#24)
