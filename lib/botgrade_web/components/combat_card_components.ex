@@ -616,6 +616,7 @@ defmodule BotgradeWeb.CombatCardComponents do
             <span class="text-base-content/50">Card HP:</span>
             <span class="font-mono">{Map.get(@card.properties, :card_hp, 3)}</span>
           </div>
+          <.defense_effectiveness armor_type={@card.properties.armor_type} />
         <% :locomotion -> %>
           <div class="flex items-center gap-2">
             <span class="text-base-content/50">Speed bonus:</span>
@@ -710,6 +711,37 @@ defmodule BotgradeWeb.CombatCardComponents do
             />
           </div>
           <span class="text-[10px] font-mono text-base-content/40 w-6 text-right">{weight}%</span>
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  # --- Defense Effectiveness Display ---
+
+  attr(:armor_type, :atom, required: true)
+
+  defp defense_effectiveness(assigns) do
+    matchups = defense_matchups(assigns.armor_type)
+    assigns = assign(assigns, :matchups, matchups)
+
+    ~H"""
+    <div class="mt-1 pt-1 border-t border-base-300/50">
+      <span class="text-base-content/50 text-xs">Effectiveness vs damage types:</span>
+      <div class="mt-1 space-y-0.5">
+        <div :for={{dmg_type, eff_pct, label} <- @matchups} class="flex items-center gap-1.5">
+          <span class={["text-xs w-14 shrink-0 font-semibold", damage_type_color(dmg_type)]}>
+            {String.capitalize(to_string(dmg_type))}
+          </span>
+          <div class="flex-1 bg-base-300 rounded-full h-1.5 overflow-hidden">
+            <div
+              class={["h-full rounded-full", effectiveness_bar_color(eff_pct)]}
+              style={"width: #{max(eff_pct, 2)}%"}
+            />
+          </div>
+          <span class={["text-[10px] font-semibold w-18 text-right", effectiveness_text_color(eff_pct)]}>
+            {label}
+          </span>
         </div>
       </div>
     </div>
@@ -1009,7 +1041,7 @@ defmodule BotgradeWeb.CombatCardComponents do
     do: "Weapons deal damage to the enemy. Assign dice from your pool into their slots to power them. Damage is calculated from the dice values plus any base damage. Different damage types interact differently with enemy defenses."
 
   defp card_type_explanation(:armor),
-    do: "Armor protects your robot from enemy attacks. Assign dice to generate plating or shields. Plating is permanent until destroyed. Shields refresh each turn but must be re-powered."
+    do: "Armor protects your robot from enemy attacks. Assign dice to generate plating or shields. Plating is permanent and blocks kinetic damage fully but is weak against energy. Shields reset each turn but block energy damage fully while being weak against kinetic. Neither blocks plasma."
 
   defp card_type_explanation(:locomotion),
     do: "Locomotion determines your robot's speed. The faster robot attacks first each turn. Assign a die to boost your speed for the round."
@@ -1126,6 +1158,30 @@ defmodule BotgradeWeb.CombatCardComponents do
       _ -> "Assign a die to the slot to activate this utility's special ability."
     end
   end
+
+  defp defense_matchups(:plating) do
+    [
+      {:kinetic, 100, "Blocks 100%"},
+      {:energy, 25, "Blocks 25%"},
+      {:plasma, 0, "No effect"}
+    ]
+  end
+
+  defp defense_matchups(:shield) do
+    [
+      {:energy, 100, "Blocks 100%"},
+      {:kinetic, 25, "Blocks 25%"},
+      {:plasma, 0, "No effect"}
+    ]
+  end
+
+  defp effectiveness_bar_color(pct) when pct >= 100, do: "bg-success"
+  defp effectiveness_bar_color(pct) when pct > 0, do: "bg-warning"
+  defp effectiveness_bar_color(_), do: "bg-error"
+
+  defp effectiveness_text_color(pct) when pct >= 100, do: "text-success"
+  defp effectiveness_text_color(pct) when pct > 0, do: "text-warning"
+  defp effectiveness_text_color(_), do: "text-error"
 
   defp targeting_bar_color(weight, max) when weight == max, do: "bg-error"
   defp targeting_bar_color(weight, max) when weight >= max * 0.6, do: "bg-warning"
