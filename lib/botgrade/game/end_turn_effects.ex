@@ -71,18 +71,32 @@ defmodule Botgrade.Game.EndTurnEffects do
       target = Targeting.select_target(weapon.properties.targeting_profile, targetable)
 
       if target do
-        {updated_opponent, updated_target, card_dmg, absorb_msg} =
+        target_hp_before = target.current_hp
+
+        {updated_opponent, updated_target, card_dmg, absorb_msg, _overkill} =
           Damage.apply_typed_damage(opponent, target, damage, :plasma)
 
         # Update the target card in the appropriate zone
         updated_opponent = update_card_in_zones(updated_opponent, updated_target.id, updated_target)
 
+        # Overkill splash damage
+        {updated_opponent, splash_logs} =
+          if card_dmg >= 2 * target_hp_before and target_hp_before > 0 do
+            splash = card_dmg - target_hp_before - 1
+            Damage.resolve_splash_chain(updated_opponent, splash, weapon.properties.targeting_profile, 1)
+          else
+            {updated_opponent, []}
+          end
+
         state = put_combatants(state, who, combatant, updated_opponent)
 
-        add_log(
-          state,
-          "#{weapon.name}: #{unused_dice_count} unused dice → #{damage} plasma damage to #{updated_target.name} (#{card_dmg} dealt)#{absorb_msg}!"
-        )
+        state =
+          add_log(
+            state,
+            "#{weapon.name}: #{unused_dice_count} unused dice → #{damage} plasma damage to #{updated_target.name} (#{card_dmg} dealt)#{absorb_msg}!"
+          )
+
+        Enum.reduce(splash_logs, state, fn msg, s -> add_log(s, msg) end)
       else
         state
       end
@@ -108,14 +122,26 @@ defmodule Botgrade.Game.EndTurnEffects do
 
       {state, target_name} =
         if target do
-          {updated_opponent, updated_target, card_dmg, absorb_msg} =
+          target_hp_before = target.current_hp
+
+          {updated_opponent, updated_target, card_dmg, absorb_msg, _overkill} =
             Damage.apply_typed_damage(opponent, target, total_damage, :energy)
 
           # Update the target card in the appropriate zone
           updated_opponent =
             update_card_in_zones(updated_opponent, updated_target.id, updated_target)
 
+          # Overkill splash damage
+          {updated_opponent, splash_logs} =
+            if card_dmg >= 2 * target_hp_before and target_hp_before > 0 do
+              splash = card_dmg - target_hp_before - 1
+              Damage.resolve_splash_chain(updated_opponent, splash, weapon.properties.targeting_profile, 1)
+            else
+              {updated_opponent, []}
+            end
+
           state = put_combatants(state, who, combatant, updated_opponent)
+          state = Enum.reduce(splash_logs, state, fn msg, s -> add_log(s, msg) end)
           {state, "#{updated_target.name} (#{card_dmg} dealt)#{absorb_msg}"}
         else
           {state, nil}

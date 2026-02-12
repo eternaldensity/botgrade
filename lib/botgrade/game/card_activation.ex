@@ -206,6 +206,7 @@ defmodule Botgrade.Game.CardActivation do
 
         target ->
           damage_type = weapon.properties.damage_type
+          target_hp_before = target.current_hp
 
           {defender, updated_target, card_dmg, absorb_msg, state} =
             if state.target_lock_active do
@@ -215,7 +216,7 @@ defmodule Botgrade.Game.CardActivation do
               {defender, updated, total_damage, " (TARGET LOCK - defenses bypassed)",
                %{state | target_lock_active: false}}
             else
-              {d, t, c, a} = Damage.apply_typed_damage(defender, target, total_damage, damage_type)
+              {d, t, c, a, _overkill} = Damage.apply_typed_damage(defender, target, total_damage, damage_type)
               {d, t, c, a, state}
             end
 
@@ -235,6 +236,16 @@ defmodule Botgrade.Game.CardActivation do
               " -> hits #{target.name}#{absorb_msg}." <>
               " #{card_dmg} to #{target.name}#{damaged_msg}#{destroyed_msg}"
 
+          # Overkill splash: if damage >= 2x target's HP, excess splashes to another target
+          {defender, splash_logs} =
+            if card_dmg >= 2 * target_hp_before and target_hp_before > 0 do
+              splash = card_dmg - target_hp_before - 1
+              targeting_profile = Map.get(weapon.properties, :targeting_profile)
+              Damage.resolve_splash_chain(defender, splash, targeting_profile, 1)
+            else
+              {defender, []}
+            end
+
           state = put_combatants(state, who, attacker, defender)
 
           state = %{
@@ -242,7 +253,10 @@ defmodule Botgrade.Game.CardActivation do
             | last_attack_result: %{weapon: weapon.name, target: target.id, damage: card_dmg}
           }
 
-          {state, attacker, log_msg}
+          splash_log = Enum.join(splash_logs, " ")
+          full_log = if splash_log != "", do: log_msg <> " " <> splash_log, else: log_msg
+
+          {state, attacker, full_log}
       end
 
     # Apply element status to defender

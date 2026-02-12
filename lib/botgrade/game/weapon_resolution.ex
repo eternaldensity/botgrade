@@ -90,6 +90,7 @@ defmodule Botgrade.Game.WeaponResolution do
 
             target ->
               damage_type = weapon.properties.damage_type
+              target_hp_before = target.current_hp
 
               {def_acc, updated_target, card_dmg, absorb_msg, tl} =
                 if tl do
@@ -98,7 +99,7 @@ defmodule Botgrade.Game.WeaponResolution do
 
                   {def_acc, updated, total_damage, " (TARGET LOCK - defenses bypassed)", false}
                 else
-                  {d, t, c, a} = Damage.apply_typed_damage(def_acc, target, total_damage, damage_type)
+                  {d, t, c, a, _overkill} = Damage.apply_typed_damage(def_acc, target, total_damage, damage_type)
                   {d, t, c, a, tl}
                 end
 
@@ -118,6 +119,15 @@ defmodule Botgrade.Game.WeaponResolution do
                   " -> hits #{target.name}#{absorb_msg}." <>
                   " #{card_dmg} to #{target.name}#{damaged_msg}#{destroyed_msg}"
 
+              # Overkill splash damage
+              {def_acc, splash_logs} =
+                if card_dmg >= 2 * target_hp_before and target_hp_before > 0 do
+                  splash = card_dmg - target_hp_before - 1
+                  Damage.resolve_splash_chain(def_acc, splash, targeting_profile, 1)
+                else
+                  {def_acc, []}
+                end
+
               # Apply self-damage
               {att_acc, self_logs} = resolve_self_damage(att_acc, weapon)
 
@@ -125,7 +135,7 @@ defmodule Botgrade.Game.WeaponResolution do
               {att_acc, def_acc, elem_logs} =
                 apply_element_in_reduce(att_acc, def_acc, weapon, who)
 
-              {att_acc, def_acc, logs ++ [log_msg] ++ self_logs ++ elem_logs, tl, st}
+              {att_acc, def_acc, logs ++ [log_msg] ++ splash_logs ++ self_logs ++ elem_logs, tl, st}
           end
         end
       end)
@@ -331,6 +341,7 @@ defmodule Botgrade.Game.WeaponResolution do
             target ->
               damage_type = weapon.properties.damage_type
               tl = acc_state.target_lock_active
+              target_hp_before = target.current_hp
 
               {def_r, updated_target, card_dmg, absorb_msg, tl} =
                 if tl do
@@ -338,7 +349,7 @@ defmodule Botgrade.Game.WeaponResolution do
                   updated = %{target | current_hp: new_hp} |> Card.sync_damage_state()
                   {def_r, updated, total_damage, " (TARGET LOCK - defenses bypassed)", false}
                 else
-                  {d, t, c, a} = Damage.apply_typed_damage(def_r, target, total_damage, damage_type)
+                  {d, t, c, a, _overkill} = Damage.apply_typed_damage(def_r, target, total_damage, damage_type)
                   {d, t, c, a, tl}
                 end
 
@@ -358,6 +369,15 @@ defmodule Botgrade.Game.WeaponResolution do
                   " -> hits #{target.name}#{absorb_msg}." <>
                   " #{card_dmg} to #{target.name}#{damaged_msg}#{destroyed_msg}"
 
+              # Overkill splash damage
+              {def_r, splash_logs} =
+                if card_dmg >= 2 * target_hp_before and target_hp_before > 0 do
+                  splash = card_dmg - target_hp_before - 1
+                  Damage.resolve_splash_chain(def_r, splash, targeting_profile, 1)
+                else
+                  {def_r, []}
+                end
+
               acc_state = put_combatants(acc_state, who, att, def_r)
               acc_state = %{acc_state | target_lock_active: tl}
 
@@ -365,6 +385,9 @@ defmodule Botgrade.Game.WeaponResolution do
                 acc_state
                 | last_attack_result: %{weapon: weapon.name, target: target.id, damage: card_dmg}
               }
+
+              # Log splash damage
+              acc_state = Enum.reduce(splash_logs, acc_state, fn msg, s -> add_log(s, msg) end)
 
               # Apply element status
               acc_state = ElementLogic.apply_element_status(acc_state, weapon, who)

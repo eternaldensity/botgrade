@@ -1,5 +1,7 @@
 defmodule Botgrade.Game.Damage do
-  alias Botgrade.Game.{Card, Robot}
+  alias Botgrade.Game.{Card, Robot, Targeting}
+
+  @max_splash_depth 10
 
   # Defense effectiveness: {plating_multiplier, shield_multiplier}
   # Kinetic: plating blocks fully, shields block poorly
@@ -14,10 +16,10 @@ defmodule Botgrade.Game.Damage do
   @doc """
   Applies typed damage to a defender's target card, accounting for defense interactions.
 
-  Returns {updated_defender, updated_target_card, card_damage_dealt, absorb_log_message}.
+  Returns {updated_defender, updated_target_card, card_damage_dealt, absorb_log_message, overkill}.
   """
   @spec apply_typed_damage(Robot.t(), Card.t(), non_neg_integer(), atom()) ::
-          {Robot.t(), Card.t(), non_neg_integer(), String.t()}
+          {Robot.t(), Card.t(), non_neg_integer(), String.t(), non_neg_integer()}
   def apply_typed_damage(defender, target_card, raw_damage, damage_type) do
     {plating_eff, shield_eff} = Map.get(@defense_matrix, damage_type, {0.5, 0.5})
 
@@ -52,7 +54,83 @@ defmodule Botgrade.Game.Damage do
     # Build absorption message
     absorb_msg = build_absorb_msg(plating_absorbed, shield_absorbed)
 
-    {updated_defender, updated_card, card_damage, absorb_msg}
+    {updated_defender, updated_card, card_damage, absorb_msg, overkill}
+  end
+
+  @doc """
+  Applies untyped splash damage directly to a card's HP, bypassing all defenses.
+  Used for overkill overflow damage.
+
+  Returns {updated_card, actual_damage_dealt, overkill}.
+  """
+  @spec apply_splash_damage(Card.t(), non_neg_integer()) ::
+          {Card.t(), non_neg_integer(), non_neg_integer()}
+  def apply_splash_damage(target_card, splash_damage) do
+    new_hp = max(0, target_card.current_hp - splash_damage)
+    overkill = max(0, splash_damage - target_card.current_hp)
+
+    updated_card =
+      %{target_card | current_hp: new_hp}
+      |> Card.sync_damage_state()
+      |> maybe_store_overkill(overkill)
+
+    {updated_card, splash_damage, overkill}
+  end
+
+  @doc """
+  Resolves recursive splash damage from overkill hits.
+
+  When damage dealt to a card is >= 2x the card's remaining HP, excess minus `depth`
+  splashes to another random target. Each successive chain increases the subtraction
+  by 1, naturally causing chains to peter out.
+
+  Returns {updated_defender, splash_log_messages}.
+  """
+  @spec resolve_splash_chain(
+          Robot.t(),
+          non_neg_integer(),
+          map() | nil,
+          non_neg_integer()
+        ) :: {Robot.t(), [String.t()]}
+  def resolve_splash_chain(defender, splash_damage, _targeting_profile, depth)
+      when splash_damage <= 0 or depth > @max_splash_depth do
+    {defender, []}
+  end
+
+  def resolve_splash_chain(defender, splash_damage, targeting_profile, depth) do
+    targetable = Targeting.targetable_cards(defender)
+
+    case Targeting.select_target(targeting_profile, targetable) do
+      nil ->
+        {defender, []}
+
+      target ->
+        {updated_target, _actual, overkill} = apply_splash_damage(target, splash_damage)
+        defender = update_card_in_zones(defender, target.id, updated_target)
+
+        destroyed_msg = if updated_target.current_hp <= 0, do: " DESTROYED!", else: ""
+
+        damaged_msg =
+          if updated_target.damage == :damaged and target.damage != :damaged,
+            do: " (damaged)",
+            else: ""
+
+        log_msg =
+          "SPLASH! #{splash_damage} overflow damage hits #{target.name}." <>
+            " #{splash_damage} to #{target.name}#{damaged_msg}#{destroyed_msg}"
+
+        # Check for recursive splash: damage must be >= 2x target's original HP
+        if overkill > 0 and splash_damage >= 2 * target.current_hp do
+          next_splash = splash_damage - target.current_hp - (depth + 1)
+
+          {defender, chain_logs} =
+            resolve_splash_chain(defender, next_splash, targeting_profile, depth + 1)
+
+          {defender, [log_msg | chain_logs]}
+        else
+          {defender, [log_msg]}
+        end
+    end
   end
 
   # Absorbs damage using a defense pool at a given effectiveness rate.
@@ -69,6 +147,21 @@ defmodule Botgrade.Game.Damage do
   end
 
   defp absorb(damage, pool, _eff), do: {damage, 0, pool}
+
+  defp update_card_in_zones(robot, card_id, updated_card) do
+    %{
+      robot
+      | installed: replace_card(robot.installed, card_id, updated_card),
+        hand: replace_card(robot.hand, card_id, updated_card)
+    }
+  end
+
+  defp replace_card(cards, card_id, updated_card) do
+    Enum.map(cards, fn
+      %Card{id: ^card_id} -> updated_card
+      card -> card
+    end)
+  end
 
   defp maybe_store_overkill(%Card{damage: :destroyed} = card, overkill) when overkill > 0 do
     %{card | properties: Map.put(card.properties, :overkill, overkill)}
