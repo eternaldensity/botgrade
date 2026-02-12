@@ -342,7 +342,16 @@ defmodule BotgradeWeb.CombatComponents do
     ]}>
       <div class="flex items-center gap-1 mb-1">
         <.icon name={card_type_icon(@card.type)} class={["size-3 shrink-0", card_icon_color(@card.type)]} />
-        <span class="font-bold truncate">{@card.name}</span>
+        <span class="font-bold truncate flex-1">{@card.name}</span>
+        <button
+          :if={not @destroyed}
+          phx-click="show_card_info"
+          phx-value-card-id={@card.id}
+          class="w-4 h-4 rounded-full bg-base-300/40 hover:bg-base-300 flex items-center justify-center shrink-0 cursor-pointer"
+          title="Card info"
+        >
+          <.icon name="hero-information-circle-mini" class="size-3 text-base-content/40" />
+        </button>
       </div>
       <div :if={not @destroyed} class="w-full bg-base-300 rounded-full h-1.5 mb-1 overflow-hidden">
         <div

@@ -3,6 +3,7 @@ defmodule BotgradeWeb.CombatLive do
 
   alias Botgrade.Combat.{CombatServer, CombatSupervisor}
   import BotgradeWeb.CombatComponents
+  import BotgradeWeb.CombatCardComponents, only: [card_info_panel: 1]
 
   @impl true
   def mount(%{"id" => combat_id}, _session, socket) do
@@ -23,7 +24,8 @@ defmodule BotgradeWeb.CombatLive do
        campaign_id: nil,
        state: state,
        selected_die: nil,
-       error_message: nil
+       error_message: nil,
+       info_card: nil
      )}
   end
 
@@ -42,7 +44,7 @@ defmodule BotgradeWeb.CombatLive do
 
   @impl true
   def handle_info({:state_updated, state}, socket) do
-    {:noreply, assign(socket, state: state, error_message: nil)}
+    {:noreply, assign(socket, state: state, error_message: nil, info_card: nil)}
   end
 
   # --- Player Actions ---
@@ -215,6 +217,25 @@ defmodule BotgradeWeb.CombatLive do
     {:noreply, push_navigate(socket, to: ~p"/")}
   end
 
+  # --- Card Info ---
+
+  @impl true
+  def handle_event("show_card_info", %{"card-id" => card_id}, socket) do
+    state = socket.assigns.state
+    all_cards =
+      state.player.installed ++
+      state.player.hand ++
+      state.player.deck ++
+      state.player.discard
+    card = Enum.find(all_cards, &(&1.id == card_id))
+    {:noreply, assign(socket, info_card: card)}
+  end
+
+  @impl true
+  def handle_event("close_card_info", _params, socket) do
+    {:noreply, assign(socket, info_card: nil)}
+  end
+
   # --- Render ---
 
   defp selected_die_value(selected_die, available_dice) do
@@ -324,6 +345,9 @@ defmodule BotgradeWeb.CombatLive do
 
       <%!-- Player Status (sticky bottom) --%>
       <.robot_status_bar :if={@state.phase not in [:ended, :scavenging]} robot={@state.player} label="YOU" position={:bottom} />
+
+      <%!-- Card Info Panel (bottom drawer) --%>
+      <.card_info_panel card={@info_card} />
     </div>
     """
   end
